@@ -1,0 +1,4514 @@
+<!--话题内容-->
+<template>
+    <div class="main">
+        <div class="main-container">
+            <van-sticky>
+                <van-nav-bar title="话题" left-text="返回" left-arrow @click-left="onBack" @click-right="router.push({path: '/index'})">
+                    <template #right>
+                        <van-icon name="wap-home-o" :size="convertViewportWidth('18px')"/>
+                    </template>
+                </van-nav-bar>
+            </van-sticky>
+            <!-- 占位播放器 -->
+            <div ref ="placeholderVideo" style="width: 0px;height: 0px;"></div>
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh"> 
+                <div class="topicContentModule">
+                     
+                    <div class="head" v-if="state.topic != null && Object.keys(state.topic).length>0">
+                        <div class="container">
+                            <div class="left-layout" v-if="!state.isTopicSkeleton">
+                                <router-link v-if="state.topic.account != null && state.topic.account != ''" tag="a" :to="{path:'/user/control/home',query: {userName: state.topic.userName}}">
+                                    <span class="avatarImg">
+                                        <img v-if="state.topic.avatarName != null" :src="state.topic.avatarPath+'100x100/'+state.topic.avatarName" class="img">
+                                    
+                                        <img v-if="state.topic.avatarName == null" :src="state.topic.avatar" class="img"/>
+                                    </span>
+                                </router-link>
+                                <template v-if="state.topic.account == null || state.topic.account == ''">
+                                    <span class="avatarImg">
+                                        <img v-if="state.topic.avatarName == null" :src="state.topic.avatar" class="img"/>
+                                    </span>
+                                </template>
+                            </div>
+                            <div class="middle-layout" v-if="!state.isTopicSkeleton">
+                                <div class="userInfo">
+                                    <span v-if="state.topic.nickname == null || state.topic.nickname == ''" class="account">{{state.topic.account}}</span>
+                                    <span v-if="state.topic.nickname != null && state.topic.nickname != ''" class="account">{{state.topic.nickname}}</span>
+                                    <span class="userRoleName" v-for="roleName in state.topic.userRoleNameList">{{roleName}}</span>
+                                    <span class="staff" v-if="state.topic.isStaff">官方人员</span>
+                                    <div v-if="state.topic.account == null || state.topic.account == ''" class="cancelAccount">此用户账号已注销</div>
+                                    <span class="time">{{state.topic.postTime}}</span>
+                                    
+                                </div>
+                                
+                            </div>
+                            <div class="right-layout">
+                                <van-button plain type="primary" v-if="!state.topic.isStaff" @click="addFollow(state.topic.userName)" round>{{state.followText}}</van-button>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    <div class="receiveRedEnvelope"  v-if="state.giveRedEnvelope != undefined && state.giveRedEnvelope != null && Object.keys(state.giveRedEnvelope).length >0">
+                        <!-- 还有未被领取的红包 -->
+                        <div class="redEnvelope" v-if="state.giveRedEnvelope.remainingQuantity >0">
+                            <div class="box">
+                                <div class="head-bg">
+                                    <div class="head"></div>
+                                </div>
+                                <div class="body">
+                                    <div class="content">
+                                        <div class="avatarBox" >
+                                            <img v-if="state.giveRedEnvelope.avatarName != null" :src="state.giveRedEnvelope.avatarPath+'100x100/'+state.giveRedEnvelope.avatarName" >
+                                            <img v-if="state.giveRedEnvelope.avatarName == null" :src="state.giveRedEnvelope.avatar" width="48" height="48"/>
+                                        </div>
+                                        <div>给大家发个红包</div>
+                                    </div>
+                                </div>
+                                <div id="open" class="open-btn" v-if="state.giveRedEnvelope.accessUserUnwrap">已拆</div>
+                            
+                                <template v-if="!state.giveRedEnvelope.accessUserUnwrap">
+                                    <div id="notOpen" class="btn"  @click="grabRedEnvelope(state.giveRedEnvelope.id)">开</div>
+                                    <div id="open" class="open-btn" style="display: none;">已拆</div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="noRedEnvelope" v-if="state.giveRedEnvelope.remainingQuantity ==0">
+                            <div class="box">
+                                <div class="content">您来晚了，红包已被抢光</div>
+                            </div>
+                        </div>
+
+                        <!-- 已领取红包用户 -->
+                        <div class="receiveRedEnvelopeUser" v-if="state.receiveRedEnvelopeList != undefined && state.receiveRedEnvelopeList != null && state.receiveRedEnvelopeList.length >0">
+                            <div class="box">
+                                <template v-for="(receiveRedEnvelope,index) in state.receiveRedEnvelopeList">
+                                    <van-popover v-model:show="state.showPopover_receiveRedEnvelope[index]" :placement="state.receiveRedEnvelopePlacement.get(receiveRedEnvelope.id)" :offset="[0,15]" class="custom-popoverModule-2" @open="onReceiveRedEnvelopePopoverLocation(receiveRedEnvelope.id)">
+                                        <div class="tooltip-text">
+                                            <template v-if="receiveRedEnvelope.receiveAccount != null && receiveRedEnvelope.receiveAccount !=''">
+                                                <span v-if="receiveRedEnvelope.receiveNickname != null && receiveRedEnvelope.receiveNickname !=''">{{receiveRedEnvelope.receiveNickname}}</span>
+                                                <span v-if="receiveRedEnvelope.receiveNickname == null || receiveRedEnvelope.receiveNickname ==''">{{receiveRedEnvelope.receiveAccount}}</span>
+                                                <span>获得 {{receiveRedEnvelope.amount}} 元</span>
+                                            </template> 
+                                            
+                                            <span v-if="(receiveRedEnvelope.receiveAvatarName == null || receiveRedEnvelope.receiveAvatarName=='') && (receiveRedEnvelope.receiveAccount == null || receiveRedEnvelope.receiveAccount =='')">此用户账号已注销 获得 {{receiveRedEnvelope.amount}} 元</span>
+
+                                        </div>
+                                        <template #reference>
+                                            <img :ref="'receiveRedEnvelopec_'+receiveRedEnvelope.id" v-if="receiveRedEnvelope.receiveAvatarName != null && receiveRedEnvelope.receiveAvatarName != ''" class='avatar'  :src="receiveRedEnvelope.receiveAvatarPath+'100x100/'+receiveRedEnvelope.receiveAvatarName"/>
+                                            <img :ref="'receiveRedEnvelopec_'+receiveRedEnvelope.id" v-if="(receiveRedEnvelope.receiveAvatarName == null || receiveRedEnvelope.receiveAvatarName=='') && (receiveRedEnvelope.receiveAccount != null && receiveRedEnvelope.receiveAccount !='')" class='avatar' :src="receiveRedEnvelope.receiveAvatar"/>
+
+                                            <img :ref="'receiveRedEnvelopec_'+receiveRedEnvelope.id" v-if="(receiveRedEnvelope.receiveAvatarName == null || receiveRedEnvelope.receiveAvatarName=='') && (receiveRedEnvelope.receiveAccount == null || receiveRedEnvelope.receiveAccount =='')" class='avatar' :src="receiveRedEnvelope.receiveAvatar"/>
+                                        </template>
+                                    </van-popover>
+                                </template>
+                            </div>
+                            <div class="more" v-if="state.receiveRedEnvelope_more">
+                                <Icon name="angle-down" size="15px" class="icon" title="更多" @click="queryReceiveRedEnvelopeUser(state.giveRedEnvelope.id,state.receiveRedEnvelopeCurrentPage+1)"/>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="topicDetail">
+                        <div class="head" v-if="!state.isTopicSkeleton">
+                            <div class="titleBox">
+                                <span class="title">{{state.topic.title}}</span>
+                                <span class="essence" v-if="state.topic.essence == true"><span>精华</span></span>
+                                <span class="top" v-if="state.topic.sort >0"><span>置顶</span></span>
+                            </div>
+                            <div class="info van-hairline--bottom">
+                                <div class="left-layout">
+                                    <div class="tagName">{{state.topic.tagName}}</div>
+                                </div>
+                                <div class="right-layout">
+                                    <div class="statistics">
+                                        <Icon name="commentCount" :size="convertViewportWidth('14px')" class="icon"/><span class="commentTotal">{{state.topic.commentTotal}}</span>
+				            	        <Icon name="view" :size="convertViewportWidth('14px')" class="icon"/><span class="viewTotal">{{state.topic.viewTotal}}</span>
+                                        <span class="more" v-if="onTopicPopoverActions(state.topic).length >0">
+                                            <van-popover v-model:show="state.showTopicPopover" placement="left-start" :overlay="true" overlay-class="custom-popoverModule-overlay" :actions="onTopicPopoverActions(state.topic)" @select="onTopicPopoverSelect">
+                                                <template #reference>
+                                                    <van-icon name="ellipsis" :size="convertViewportWidth('16px')"/>
+                                                </template>
+                                            </van-popover>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div> 
+                        
+                        </div>
+                        <div class="topicContent" v-if="!state.isTopicSkeleton">
+                            <div class="lastUpdateTime" v-if="state.topic.lastUpdateTime != null">最后修改时间：{{state.topic.lastUpdateTime}}</div>
+                            
+                            
+                            <div class="cancelAccount" v-if="state.topic.account == null || state.topic.account == ''">此用户账号已注销</div>
+                            
+                            <div :ref="'topic_'+state.topic.id">
+                                <RenderTemplate @click-onZoomPicture="onZoomPicture" @click-onTopicUnhide="onTopicUnhide" :html="state.topic.content"></RenderTemplate>
+                                        
+                            </div>
+
+                            
+                        </div>
+                        <div class="topicContent" v-if="state.isTopicSkeleton">
+                            <van-skeleton :row="3" :loading="state.isTopicSkeleton" class="skeleton" style="padding-top: 30px;"/>
+                        </div>
+                        <div class="operating" v-if="state.topic != null && Object.keys(state.topic).length>0">
+                            <div class="bottomInfo">
+                                <van-button type="primary" plain class="favorites" :disabled="state.alreadyCollected" @click="addFavorite(state.topic.id)">
+                                    <template #default>
+                                        <span>{{state.favoriteCount}}</span>
+                                        {{state.alreadyCollected == true ? '已收藏':'收藏'}}
+                                    </template>
+                                    <template #icon>
+                                        <Icon name="favorites" :size="convertViewportWidth('16px')" class="icon"/>
+                                    </template>
+                                </van-button>
+                                <van-button type="primary" plain class="like" :disabled="state.alreadyLiked" @click="addLike(state.topic.id);">
+                                    <template #default>
+                                        <span>{{state.likeCount}}</span>
+                                        {{state.alreadyLiked == true ? '已赞':'赞'}}
+                                    </template>
+                                    <template #icon>
+                                        <Icon name="thumb-up" :size="convertViewportWidth('16px')" class="icon"/>
+                                    </template>
+                                </van-button>
+                            </div>
+                        </div> 
+                        
+                    </div>
+
+                     <!-- 话题允许评论 -->
+                    <div class="allow-comment-wrap" v-if="state.topic.allow">
+                        <!-- 已登录 -->
+                        <div v-if="store_systemUser != null && Object.keys(store_systemUser).length>0">
+                            <!-- 显示评论按钮 -->
+                            <div class="comment-button" v-if="state.allowComment">
+                                <van-button round block plain type="primary" native-type="submit" @click="addCommentUI" >发表评论</van-button>
+                            </div>
+                             <!-- 不显示评论按钮 -->      
+                            <div class="no-comment-button" v-if="!state.allowComment">
+                                评论已关闭
+                            </div>
+                        </div>
+                        <!-- 未登录 -->
+                        <div v-else class="comment-button" >
+                            <div class="login-button"><span @click="router.push({path: '/login',query:{jumpUrl :createJumpAttribute()}})">登录</span>后发表评论</div>
+                        </div>
+                    </div>
+
+                    <!-- 话题不允许评论 -->
+					<div class="no-comment-wrap" v-if="state.topic != null && Object.keys(state.topic).length>0 && !state.topic.allow">
+                        <div class="no-comment">
+                            本话题评论已关闭
+                        </div>
+					</div>
+
+                    <!-- 添加评论 -->
+                    <van-popup v-model:show="state.popup_addComment" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
+                        <div class="addCommentModule">
+                            <van-form :ref="'formAddCommentRef'" :scroll-to-error="true" class="form-container">
+                                <van-cell-group>
+                                    <van-field center :error-message="error.content.get('addComment-'+state.topicId)">
+                                        <template #input>
+                                            <div style="width: 100%;">
+                                                <van-sticky :z-index="1" >
+                                                    <div ref="addCommentContentEditorToolbarRef" class="editor-toolbar" style="padding-top: 13px;"></div>
+                                                </van-sticky>
+                                                <div ref="addCommentContentEditorTextRef"  class="editor-text" style="min-height: 320px;"></div>
+                                            </div>
+                                        </template>
+                                    </van-field>
+                                    <van-field v-model="state.captchaValue['addComment-'+state.topicId]"  @change.native="checkCaptchaValueRules('addComment-'+state.topicId)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('addComment-'+state.topicId)" :error-message="error.captchaValue.get('addComment-'+state.topicId)">
+                                        <template #button>
+                                            <van-image :src="state.imgUrl.get('addComment-'+state.topicId)" @click="replaceCaptcha('addComment-'+state.topicId)" class="captcha-image"/>
+                                        </template>
+                                        <template #extra >
+                                            <span class="captcha-replace" @click="replaceCaptcha('addComment-'+state.topicId)">换一幅</span>
+                                        </template>
+                                    </van-field>
+                                
+                                </van-cell-group>
+
+                                <van-field center :error-message="error.comment.get('addComment-'+state.topicId)">
+                                    <template #input>
+                                        <div class="submitButton">
+                                            <van-button round block type="primary" native-type="submit" @mousedown="onAddCommentFormSubmit" :disabled="state.allowSubmit.get('addComment-'+state.topicId)">提交</van-button>
+                                        </div>
+                                    </template>
+                                </van-field>
+                            </van-form>
+                        </div>
+                    </van-popup>
+
+                    <van-list v-model:loading="state.isLoading" :finished="state.isFinished" v-model:error="state.isError" :error-text="(state.topic != null && Object.keys(state.topic).length>0) ? '请求失败，点击重新加载' : ''" finished-text="" @load="onLoad" >
+                
+                        <div class="commentList" v-if="state.commentList != null && state.commentList.length >0">
+                        
+                            <div class="item van-hairline--bottom" v-for="(comment,index) in state.commentList" :key="comment.id"  :ref="'comment_'+comment.id" >
+                                <div class="top-container">
+                                    <div class="left-layout">
+                                        <router-link v-if="comment.account != null && comment.account != ''" tag="a" :to="{path:'/user/control/home',query: {userName: comment.userName}}">
+                                            <span class="avatarImg">
+                                                <img v-if="comment.avatarName != null" :src="comment.avatarPath+'100x100/'+comment.avatarName" class="img">
+                                            
+                                                <img v-if="comment.avatarName == null" :src="comment.avatar" class="img"/>
+                                            </span>
+                                        </router-link>
+                                        <template v-if="comment.account == null || comment.account == ''">
+                                            <span class="avatarImg">
+                                                <img v-if="comment.avatarName == null" :src="comment.avatar" class="img"/>
+                                            </span>
+                                        </template>
+                                    </div>
+                                    <div class="middle-layout">
+                                        <div class="userInfo">
+                                            <span v-if="(comment.nickname == null || comment.nickname == '') && comment.account != null && comment.account != ''" class="account">{{comment.account}}</span>
+                                            <span v-if="comment.nickname != null && comment.nickname != ''" class="account">{{comment.nickname}}</span>
+                                            <span class="userRoleName" v-for="roleName in comment.userRoleNameList">{{roleName}}</span>
+                                            <span class="staff" v-if="comment.isStaff">官方人员</span>
+                                            <div v-if="comment.account == null || comment.account == ''" class="cancelNickname">已注销</div>
+                                            <span class="time">{{comment.postTime}}</span>
+                                            
+                                        </div>
+                                        
+                                    </div>
+                                    <div class="right-layout">
+                                        <div class="floor">{{index+1}}楼</div>
+                                        <div class="more" v-if="onCommentPopoverActions(comment).length >0">
+                                            <van-popover v-model:show="state.showCommentPopover[comment.id]" placement="left-start" :overlay="true" overlay-class="custom-popoverModule-overlay" :actions="onCommentPopoverActions(comment)" @select="onCommentPopoverSelect">
+                                                <template #reference>
+                                                    <van-icon name="ellipsis" :size="convertViewportWidth('16px')"/>
+                                                </template>
+                                            </van-popover>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bottom-container">
+                                    
+                                    <div class="quote" v-if="comment.quoteList != null && comment.quoteList.length >0">
+                                        <RenderTemplate  :html="state.quoteData.get(comment.id)"></RenderTemplate>
+                                    </div>
+                                    
+                                    <div class="commentContent">
+                                        <div class="cancelAccount" v-if="comment.account == null || comment.account == ''">此用户账号已注销</div>
+                                    
+
+                                        <div :ref="'commentContent_'+comment.id">
+                                            <RenderTemplate @click-onZoomPicture="onZoomPicture" :html="comment.content"></RenderTemplate>
+                                        
+                                        </div>
+                                    </div>
+
+                                    <div class="replyList" v-if="comment.replyList != null && comment.replyList.length >0">
+                                        <div class="reply-container van-hairline--top" v-for="(reply,index2) in comment.replyList" :key="reply.id" v-show="state.replyExpandOrShrink.get(comment.id) || (state.replyExpandOrShrink.get(comment.id) == false && index2 <2)">
+
+                                            <div class="top-container" >
+                                                <div class="left-layout">
+                                                    <router-link v-if="reply.account != null && reply.account != ''" tag="a" :to="{path:'/user/control/home',query: {userName: reply.userName}}">
+                                                        <span class="avatarImg">
+                                                            <img v-if="reply.avatarName != null" :src="reply.avatarPath+'100x100/'+reply.avatarName" class="img">
+                                                        
+                                                            <img v-if="reply.avatarName == null" :src="reply.avatar" class="img"/>
+                                                        </span>
+                                                    </router-link>
+                                                    <template v-if="reply.account == null || reply.account == ''">
+                                                        <span class="avatarImg">
+                                                            <img v-if="reply.avatarName == null" :src="reply.avatar" class="img"/>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                                <div class="middle-layout">
+                                                    <div class="userInfo">
+                                                        <span v-if="(reply.nickname == null || reply.nickname == '') && reply.account != null && reply.account != ''" class="account">{{reply.account}}</span>
+                                                        <span v-if="reply.nickname != null && reply.nickname != ''" class="account">{{reply.nickname}}</span>
+                                                        <span class="userRoleName" v-for="roleName in reply.userRoleNameList">{{roleName}}</span>
+                                                        <span class="staff" v-if="reply.isStaff">官方人员</span>
+                                                        <div v-if="reply.account == null || reply.account == ''" class="cancelNickname">已注销</div>
+                                                        <span class="time">{{reply.postTime}}</span>
+                                                        
+                                                    </div>
+                                                    
+                                                </div>
+                                                <div class="right-layout">
+                                                    <div class="more" v-if="onReplyPopoverActions(reply).length >0">
+                                                        <van-popover v-model:show="state.showReplyPopover[reply.id]" placement="left-start" :overlay="true" overlay-class="custom-popoverModule-overlay" :actions="onReplyPopoverActions(reply)" @select="onReplyPopoverSelect">
+                                                            <template #reference>
+                                                                <van-icon name="ellipsis" :size="convertViewportWidth('16px')"/>
+                                                            </template>
+                                                        </van-popover>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="bottom-container">
+                                                <div class="replyContent">
+                                                    <div v-if="reply.account == null || reply.account == ''" class="cancelAccount">此用户账号已注销</div>
+                                                    {{reply.content}}
+                                                </div>
+
+                                            </div>
+                                             <!-- 修改回复 -->
+                                            <van-popup v-model:show="state.editReplyFormView[reply.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" class="custom-bottom-popupModule" :style="{ height: '80%' }" round>
+                                                <div class="editReplyModule">
+                                                    <van-form :scroll-to-error="true" class="form-container">
+                                                    
+                                                        <van-field v-model="state.editReplyContentField[reply.id]" rows="6" autosize type="textarea" placeholder="请输入内容" :error-message="error.replyContent.get('editReply-'+reply.id)" class="replyContent-item"/>
+                                                        <van-field v-model="state.captchaValue['editReply-'+reply.id]"  @change.native="checkCaptchaValueRules('editReply-'+reply.id)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('editReply-'+reply.id)" :error-message="error.captchaValue.get('editReply-'+reply.id)">
+                                                            <template #button>
+                                                                <van-image :src="state.imgUrl.get('editReply-'+reply.id)" @click="replaceCaptcha('editReply-'+reply.id)" class="captcha-image"/>
+                                                            </template>
+                                                            <template #extra >
+                                                                <span class="captcha-replace" @click="replaceCaptcha('editReply-'+reply.id)">换一幅</span>
+                                                            </template>
+                                                        </van-field>
+
+                                                        <van-field :error-message="error.reply.get('editReply-'+reply.id)">
+                                                            <template #input>
+                                                                <div class="submitButton">
+                                                                    <van-button round block type="primary" native-type="submit" @mousedown="onEditReply(reply.id)" :disabled="state.allowSubmit.get('editReply-'+reply.id)">提交</van-button>
+                                                                </div>
+                                                            </template>
+                                                        </van-field>
+                                                    </van-form>
+                                                </div>
+                                            </van-popup>
+                                        </div>
+                                        <div class="link" v-if="comment.replyList.length >2">
+                                            <span @click="telescopicReply(comment.id);" v-if="state.replyExpandOrShrink.get(comment.id)">点击收缩</span>
+                                            <span @click="telescopicReply(comment.id);" v-else>剩余{{comment.replyList.length-2}}条</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 添加回复 -->
+                                    <van-popup v-model:show="state.addReplyFormView[comment.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" class="custom-bottom-popupModule" :style="{ height: '80%' }" round>
+                                        <div class="addReplyModule">
+                                            <van-form :scroll-to-error="true" class="form-container">
+                                              
+                                                <van-field v-model="state.addReplyContentField[index]" rows="6" autosize type="textarea" placeholder="请输入内容" :error-message="error.replyContent.get('addReply-'+comment.id)" class="replyContent-item"/>
+                                                <van-field v-model="state.captchaValue['addReply-'+comment.id]"  @change.native="checkCaptchaValueRules('addReply-'+comment.id)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('addReply-'+comment.id)" :error-message="error.captchaValue.get('addReply-'+comment.id)">
+                                                    <template #button>
+                                                        <van-image :src="state.imgUrl.get('addReply-'+comment.id)" @click="replaceCaptcha('addReply-'+comment.id)" class="captcha-image"/>
+                                                    </template>
+                                                    <template #extra >
+                                                        <span class="captcha-replace" @click="replaceCaptcha('addReply-'+comment.id)">换一幅</span>
+                                                    </template>
+                                                </van-field>
+
+                                                <van-field :error-message="error.reply.get('addReply-'+comment.id)">
+                                                    <template #input>
+                                                        <div class="submitButton">
+                                                            <van-button round block type="primary" native-type="submit" @mousedown="onAddReply(comment.id)" :disabled="state.allowSubmit.get('addReply-'+comment.id)">提交</van-button>
+                                                        </div>
+                                                    </template>
+                                                </van-field>
+                                            </van-form>
+                                        </div>
+                                    </van-popup>
+                                    <!-- 引用评论 -->
+                                    <van-popup v-model:show="state.quoteFormView[comment.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
+                                        <div class="quoteCommentModule">
+                                            <div class="quoteBox"><span class="van-multi-ellipsis--l2">{{state.quoteCommentContent}}</span></div>
+                                            <van-form :scroll-to-error="true" class="form-container">
+                                                <van-field center :error-message="error.content.get('addQuoteComment-'+comment.id)">
+                                                    <template #input>
+                                                        <div style="width: 100%;">
+                                                            <van-sticky :z-index="1" >
+                                                                <div :ref="'quoteCommentContentEditorToolbarRef_'+comment.id" class="editor-toolbar" style="padding-top: 13px;"></div>
+                                                            </van-sticky>
+                                                            <div :ref="'quoteCommentContentEditorTextRef_'+comment.id"  class="editor-text" style="min-height: 320px;"></div>
+                                                        </div>
+                                                    </template>
+                                                </van-field>
+                                                <van-field v-model="state.captchaValue['addQuoteComment-'+comment.id]"  @change.native="checkCaptchaValueRules('addQuoteComment-'+comment.id)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('addQuoteComment-'+comment.id)" :error-message="error.captchaValue.get('addQuoteComment-'+comment.id)">
+                                                    <template #button>
+                                                        <van-image :src="state.imgUrl.get('addQuoteComment-'+comment.id)" @click="replaceCaptcha('addQuoteComment-'+comment.id)" class="captcha-image"/>
+                                                    </template>
+                                                    <template #extra >
+                                                        <span class="captcha-replace" @click="replaceCaptcha('addQuoteComment-'+comment.id)">换一幅</span>
+                                                    </template>
+                                                </van-field>
+
+                                                <van-field :error-message="error.comment.get('addQuoteComment-'+comment.id)">
+                                                    <template #input>
+                                                        <div class="submitButton">
+                                                            <van-button round block type="primary" native-type="submit" @mousedown="onQuoteCommentFormSubmit(comment.id)" :disabled="state.allowSubmit.get('addQuoteComment-'+comment.id)">提交</van-button>
+                                                        </div>
+                                                    </template>
+                                                </van-field>
+                                            </van-form>
+                                        </div>
+                                    </van-popup>
+                                    <!-- 修改评论 -->
+                                    <van-popup v-model:show="state.editCommentFormView[comment.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
+                                        <div class="editCommentModule">
+                                            <van-form :scroll-to-error="true" class="form-container">
+                                                <van-field center :error-message="error.content.get('editComment-'+comment.id)">
+                                                    <template #input>
+                                                        <div style="width: 100%;">
+                                                            <van-sticky :z-index="1" >
+                                                                <div :ref="'editCommentContentEditorToolbarRef_'+comment.id" class="editor-toolbar" style="padding-top: 13px;"></div>
+                                                            </van-sticky>
+                                                            <div :ref="'editCommentContentEditorTextRef_'+comment.id"  class="editor-text" style="min-height: 320px;"></div>
+                                                        </div>
+                                                    </template>
+                                                </van-field>
+                                                <van-field v-model="state.captchaValue['editComment-'+comment.id]"  @change.native="checkCaptchaValueRules('editComment-'+comment.id)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('editComment-'+comment.id)" :error-message="error.captchaValue.get('editComment-'+comment.id)">
+                                                    <template #button>
+                                                        <van-image :src="state.imgUrl.get('editComment-'+comment.id)" @click="replaceCaptcha('editComment-'+comment.id)" class="captcha-image"/>
+                                                    </template>
+                                                    <template #extra >
+                                                        <span class="captcha-replace" @click="replaceCaptcha('editComment-'+comment.id)">换一幅</span>
+                                                    </template>
+                                                </van-field>
+
+                                                <van-field :error-message="error.comment.get('editComment-'+comment.id)">
+                                                    <template #input>
+                                                        <div class="submitButton">
+                                                            <van-button round block type="primary" native-type="submit" @mousedown="onEditCommentFormSubmit(comment.id)" :disabled="state.allowSubmit.get('editComment-'+comment.id)">提交</van-button>
+                                                        </div>
+                                                    </template>
+                                                </van-field>
+                                            </van-form>
+                                        </div>
+                                    </van-popup>
+
+                                   
+                                </div>
+                            </div>
+                        </div>
+                    </van-list>
+                </div>
+                <!--  相似话题 集合 -->
+                <div class="likeTopicModule" v-if="state.likeTopicList != null && state.likeTopicList.length >0">
+                    <div class="likeTopic">
+                        <div class="title van-hairline--bottom">相关话题</div>
+                        <ul class="topicList">
+                            <li class="topic-title " v-for="likeTopic in state.likeTopicList">
+                                <router-link tag="a" :to="{path: '/thread', query:{ topicId : likeTopic.id}}">
+                                    {{likeTopic.title}}
+                                </router-link>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </van-pull-refresh>
+            
+        </div>
+    </div>
+</template>
+<script lang="ts" setup>
+    import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, nextTick, onUnmounted,  ref, watchEffect, onActivated} from 'vue'
+    import pinia from '@/store/store'
+    import {useStore} from '@/store'
+    import { storeToRefs } from 'pinia';
+    import { onBack } from '@/utils/history'
+    import { convertViewportWidth } from '@/utils/px-to-viewport';
+    import { onBeforeRouteUpdate, useRouter } from 'vue-router'
+    import { AxiosResponse } from 'axios'
+    import { PageView,Topic,Comment, Reply, GiveRedEnvelope, ReceiveRedEnvelope } from "@/types/index";
+    import { letterAvatar } from '@/utils/letterAvatar';
+    import { escapeHtml, escapeVueHtml } from '@/utils/escape';
+    import Hls from 'hls.js';
+    import DPlayer from 'dplayer';
+    import { getLanguageClassName, getPageBasePath, processErrorInfo } from '@/utils/tool';
+    import Prism from "prismjs";
+    import { Dialog, Image as VanImage, ImagePreview, Notify } from 'vant';
+    import Icon from "@/components/icon/Icon.vue";
+    import { createEditor, destroyEditor } from '@/utils/editor';
+    import { createJumpAttribute } from '@/utils/jumpProcess';
+
+    const { proxy } = getCurrentInstance() as ComponentInternalInstance;
+    const store = useStore(pinia);
+    const router = useRouter();
+    const {title:store_title,keywords:store_keywords,description:store_description,systemUser:store_systemUser} = storeToRefs(store)
+ 
+    
+    const placeholderVideo = ref();
+
+    const addCommentContentEditorToolbarRef = ref();
+    const addCommentContentEditorTextRef = ref();
+
+    //html页元信息
+    watchEffect(() => {
+        let titleValue = store_title.value//监听网站标题
+      
+        if(titleValue != null && titleValue != '' && state.topic != null && Object.keys(state.topic).length > 0){
+            document.title = (state.topic.title != null ? state.topic.title : '')+ ' - ' + titleValue;
+        }
+    }, {
+        flush: 'post'//在组件更新后触发，第一次运行需要组件渲染完成才执行
+    })
+
+
+    const state = reactive({
+        topicId:'',
+        topic: {} as Topic,
+        playerIdList: [] as Array<string>,//视频播放Id列表
+        playerObjectList: [] as Array<any>,//视频播放对象集合
+        playerHlsList: [] as Array<any>,//视频播放流对象集合
+        playerNodeList: [] as Array<any>,//视频节点对象集合
+        placeholder_DPlayer:'' as any,//占位播放器
+        lastPlayerId:'',//最后运行的播放Id
+
+        showTopicPopover :false,//话题气泡弹出框
+
+        alreadyCollected :false,//用户是否已经收藏话题
+        favoriteCount : 0,//话题用户收藏总数
+        alreadyLiked:false,//用户是否已经点赞该话题
+        likeCount : 0,//话题用户点赞总数
+        hidePasswordIndex:0,//隐藏标签密码框索引
+        isReplyTopicVisible:false,//是否包含回复话题可见隐藏标签
+
+        followText:'关注',//关注文本
+
+        showPopover_receiveRedEnvelope:[],//气泡弹出框
+        receiveRedEnvelopePlacement:new Map(),//红包位置 map格式 key:红包Id value: placement属性
+        giveRedEnvelope :{} as GiveRedEnvelope,//红包
+        receiveRedEnvelopeList:[] as Array<ReceiveRedEnvelope>,//领取红包用户集合
+        selectedReceiveRedEnvelopeId:'',//选中领取红包用户
+        receiveRedEnvelopeCurrentPage:0,//领取红包用户当前页
+        receiveRedEnvelope_more:false,//是否显示更多领取红包用户
+
+        showCommentPopover:{} as any,//评论气泡弹出框   key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        showReplyPopover:{} as any,//回复气泡弹出框  key:回复Id value:是否显示  {回复Id-1 : 是否显示,回复Id-2 : 是否显示}
+        commentList:[] as Array<Comment>,
+        totalrecord : 0, //总记录数
+        currentpage : 0, //当前页码
+        totalpage : 1, //总页数
+        maxresult: 12, //每页显示记录数    
+        
+        replyExpandOrShrink :new Map(), //回复展开/收缩 map格式 key:评论Id value:是否展开
+        allowComment:false,//是否显示评论表单
+        availableTag:[],//评论编辑器允许使用标签
+        fileSystem:0,//文件存储系统
+
+        popup_addComment:false,//添加评论弹出窗口
+        addCommentEditor :{} as any,//添加评论编辑器
+        addCommentEditorCreateParameObject :{} as any,//添加评论编辑器的创建参数
+
+        quoteCommentContent : '',//引用评论内容
+        quoteFormView : {} as any,//评论引用表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        quoteEditorMap:new Map(),//引用评论富文本编辑器集合 key:评论Id value:富文本编辑器
+        quoteEditorCreateParameMap:new Map(),//引用评论编辑器的创建参数 key:评论Id value:编辑器参数对象
+        quoteData : new Map(),//引用数据 map格式 key:评论Id value:引用html数据
+        
+        editCommentFormView : {} as any,//修改评论表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        editCommentEditorMap:new Map(),//修改评论富文本编辑器集合 key:评论Id value:富文本编辑器
+        editCommentEditorCreateParameMap:new Map(),//修改评论编辑器的创建参数 key:评论Id value:编辑器参数对象
+
+        addReplyContentField : [] as any, //添加回复内容项绑定
+		addReplyFormView : {} as any,//添加回复表单  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        
+
+		editReplyContentField : {} as any, //修改回复内容项绑定  key:回复Id value:内容 {回复Id-1 : 内容,回复Id-2 : 内容}
+		editReplyFormView : {} as any,//修改回复表单  key:回复Id value:是否显示 {回复Id-1 : 是否显示,回复Id-2 : 是否显示}
+
+        showCaptcha:new Map<string,boolean>(),//是否显示验证码  本项及以下几项的key格式为 key:模块+id  例如：添加评论key=addComment-话题Id   修改评论key=editComment-评论Id    添加引用评论key=addQuoteComment-评论Id    添加回复key=addReply-评论Id   修改回复key=editReply-回复Id
+        captchaKey: new Map<string,string>(),//验证码key
+        captchaValue: {} as any,//验证码值
+        imgUrl: new Map<string,string>(),//验证码图片
+        allowSubmit:new Map<string,boolean>(),//提交按钮disabled状态
+        
+        likeTopicList:[] as Array<Topic>, //相似话题集合
+
+
+        isRefreshing:false,//是否处于下拉加载中状态
+        isError:false,//是否列表数据加载失败
+        isLoading:false,//是否处于加载中状态
+        isFinished:false,//是否加载完毕
+        isTopicSkeleton:true,//是否显示话题骨架屏
+        isCommentSkeleton:true,//是否显示评论骨架屏
+        isShowPage:false,//是否显示分页
+
+       // photo_loading:photo,//图片加载中图标
+       // photo_error:photo_fail,//图片加载失败图标
+    });
+
+    
+
+    //下拉刷新时触发
+    const onRefresh = () => {
+        state.isRefreshing = false;
+
+        clearVideoPlayer();
+        state.topic= {} as Topic;
+        state.playerIdList.length = 0;//视频播放Id列表
+        state.playerObjectList.length = 0;//视频播放对象集合
+        state.playerHlsList.length = 0;//视频播放流对象集合
+        state.playerNodeList.length = 0;//视频节点对象集合
+        state.placeholder_DPlayer = '';//占位播放器
+        state.lastPlayerId = '';//最后运行的播放Id
+
+        state.showTopicPopover = false;//话题气泡弹出框
+
+        state.alreadyCollected = false;//用户是否已经收藏话题
+        state.favoriteCount = 0;//话题用户收藏总数
+        state.alreadyLiked = false;//用户是否已经点赞该话题
+        state.likeCount = 0;//话题用户点赞总数
+        state.hidePasswordIndex = 0;//隐藏标签密码框索引
+        state.isReplyTopicVisible = false;//是否包含回复话题可见隐藏标签
+
+        state.followText = '关注';//关注文本
+
+        state.showPopover_receiveRedEnvelope.length = 0;//气泡弹出框
+        state.receiveRedEnvelopePlacement.clear();//红包位置 map格式 key:红包Id value: placement属性
+        state.giveRedEnvelope = {} as GiveRedEnvelope;//红包
+        state.receiveRedEnvelopeList.length = 0;//领取红包用户集合
+        state.selectedReceiveRedEnvelopeId = '';//选中领取红包用户
+        state.receiveRedEnvelopeCurrentPage = 0;//领取红包用户当前页
+        state.receiveRedEnvelope_more = false;//是否显示更多领取红包用户
+
+        state.showCommentPopover = {} as any;//评论气泡弹出框   key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        state.showReplyPopover = {} as any;//回复气泡弹出框  key:回复Id value:是否显示  {回复Id-1 : 是否显示,回复Id-2 : 是否显示}
+        state.commentList.length = 0;
+        state.totalrecord = 0; //总记录数
+        state.currentpage = 0; //当前页码
+        state.totalpage = 1; //总页数
+        state.maxresult = 12; //每页显示记录数    
+        
+        state.replyExpandOrShrink.clear(); //回复展开/收缩 map格式 key:评论Id value:是否展开
+        state.allowComment = false;//是否显示评论表单
+        state.availableTag.length = 0;//评论编辑器允许使用标签
+        state.fileSystem = 0;//文件存储系统
+
+        state.popup_addComment = false;//添加评论弹出窗口
+        state.addCommentEditor = {} as any;//添加评论编辑器
+        state.addCommentEditorCreateParameObject = {} as any;//添加评论编辑器的创建参数
+
+        state.quoteCommentContent = '';//引用评论内容
+        state.quoteFormView = {} as any;//评论引用表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        state.quoteEditorMap.clear();//引用评论富文本编辑器集合 key:评论Id value:富文本编辑器
+        state.quoteEditorCreateParameMap.clear();//引用评论编辑器的创建参数 key:评论Id value:编辑器参数对象
+        state.quoteData.clear();//引用数据 map格式 key:评论Id value:引用html数据
+        
+        state.editCommentFormView = {} as any;//修改评论表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        state.editCommentEditorMap.clear();//修改评论富文本编辑器集合 key:评论Id value:富文本编辑器
+        state.editCommentEditorCreateParameMap.clear();//修改评论编辑器的创建参数 key:评论Id value:编辑器参数对象
+
+        state.addReplyContentField.length = 0; //添加回复内容项绑定
+		state.addReplyFormView = {} as any;//添加回复表单  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
+        
+
+		state.editReplyContentField = {} as any; //修改回复内容项绑定  key:回复Id value:内容 {回复Id-1 : 内容,回复Id-2 : 内容}
+		state.editReplyFormView = {} as any;//修改回复表单  key:回复Id value:是否显示 {回复Id-1 : 是否显示,回复Id-2 : 是否显示}
+
+        state.showCaptcha.clear();//是否显示验证码  本项及以下几项的key格式为 key:模块+id  例如：添加评论key=addComment-话题Id   修改评论key=editComment-评论Id    添加引用评论key=addQuoteComment-评论Id    添加回复key=addReply-评论Id   修改回复key=editReply-回复Id
+        state.captchaKey.clear();//验证码key
+        state.captchaValue = {} as any;//验证码值
+        state.imgUrl.clear();//验证码图片
+        state.allowSubmit.clear();//提交按钮disabled状态
+        
+        state.likeTopicList.length = 0; //相似话题集合
+         
+        state.isError = false;//是否列表数据加载失败
+        state.isFinished = false; 
+
+        state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
+        init();
+        queryCommentList(state.topicId,'', '', state.currentpage+1);
+    };
+
+    //错误
+    const error = reactive({
+        content : new Map<string,string>(),//评论和引用内容错误
+        replyContent: new Map<string,string>(),//回复内容错误
+        captchaValue : new Map<string,string>(),
+        comment: new Map<string,string>(),//评论和引用错误
+        reply: new Map<string,string>(),//回复错误
+    })
+
+
+    //加载列表
+    const onLoad = () => {
+        queryCommentList(state.topicId,'', '', state.currentpage+1);
+    }
+
+    //查询话题
+    const queryTopic = (topicId: string,callback :any) => {
+        proxy?.$axios({
+            url: '/thread',
+            method: 'get',
+            params:  { 
+                topicId: topicId,
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+            showErrorMessage:false,// 是否显示错误提示
+        })
+        .then((response: AxiosResponse) => {
+            return response?.data
+        })
+        .then((data: Topic) => {
+            if(data){
+                state.isTopicSkeleton = false;//关闭骨架屏
+                //清空播放器
+                clearVideoPlayer();               
+                //处理自定义标签
+                let contentNode = document.createElement("div");
+                contentNode.innerHTML = data.content;
+                bindNode(contentNode);
+                
+                data.content = escapeVueHtml(contentNode.innerHTML);
+
+                
+                state.topic = data;
+
+                if(state.topic.nickname != null && state.topic.nickname !=''){
+                    state.topic.avatar = letterAvatar(state.topic.nickname, 40);
+                }else{
+                    state.topic.avatar = letterAvatar(state.topic.account, 40);
+                }
+
+                nextTick(()=>{
+                    setTimeout(function() {
+                        renderVideoPlayer();//渲染视频播放器
+                    }, 30);
+
+                    //渲染代码
+                    let topicRefValue = proxy?.$refs['topic_'+state.topicId];
+                    if(topicRefValue != undefined){
+                        renderBindNode(topicRefValue); 
+                    }
+                });
+
+                
+
+                //回调
+                callback();
+               
+            }
+            
+        })
+        .catch((error: any) =>{
+            state.isError = true;
+            state.isLoading = false;//加载状态结束
+            console.log(error);
+        });
+    }
+
+    //查询评论列表
+    const queryCommentList = (topicId: string,commentId: string, replyId: string, page:number|undefined) => {
+        let params = {} as any;
+        params.topicId = topicId;
+        if(commentId != null && commentId != ''){
+            params.commentId = commentId;
+        }
+        if(page != undefined){
+            params.page = page;
+        }
+
+        proxy?.$axios({
+            url: '/queryCommentList',
+            method: 'get',
+            params:  params,
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+            showErrorMessage:false,// 是否显示错误提示
+        })
+        .then((response: AxiosResponse) => {
+            return response?.data
+        })
+        .then((data: PageView<Comment>) => {
+            state.isCommentSkeleton = false;//关闭骨架屏
+
+          
+            if(data.records != null && data.records.length >0){
+                for(let i:number=0; i<data.records.length; i++){
+                    let comment = data.records[i];
+                    
+                    state.replyExpandOrShrink.set(comment.id, false); //是否展开
+
+                    if(comment.nickname != null && comment.nickname !=''){
+                        comment.avatar = letterAvatar(comment.nickname, 60);
+                    }else{
+                        comment.avatar = letterAvatar(comment.account, 60);
+                    }
+
+                    if(comment.replyList != null && comment.replyList.length >0){
+                        for(let j:number=0; j<comment.replyList.length; j++){
+                            let reply = comment.replyList[j];
+                            if(reply.nickname != null && reply.nickname !=''){
+                                reply.avatar = letterAvatar(reply.nickname, 38);
+                            }else{
+                                reply.avatar = letterAvatar(reply.account, 38);
+                            }
+                        }
+                    }
+                    
+
+                    //组装引用数据
+                    if(comment.quoteList != null && comment.quoteList.length >0){
+                        let quoteContent = "";
+                        for (let j = 0; j <comment.quoteList.length; j++) {
+                            let quote = comment.quoteList[j];
+
+                            let avatarHtml = "";
+                            if(quote.account != null && quote.account != ''){
+                                avatarHtml += "<router-link class=\"avatarBox\"  tag=\"a\" :to=\"{path: '/user/control/home', query: {userName: '"+quote.userName+"'}}\">";
+                                if(quote.avatarName != undefined && quote.avatarName != null && quote.avatarName != ''){
+                                    avatarHtml += "<img src=\""+quote.avatarPath+"100x100/"+quote.avatarName+"\">";			
+                                }		
+                                if(quote.avatarName == undefined || quote.avatarName == null || quote.avatarName == ''){
+                                    let char = (quote.nickname != null && quote.nickname != '') ? quote.nickname : quote.account;
+                                    let width = 22;//头像宽
+                                    avatarHtml += "<img src=\""+letterAvatar(char, width)+"\">";
+                                    
+                                }
+                                avatarHtml += "</router-link>";
+                            }
+                            
+                            if(quote.account == null || quote.account == ''){
+                                avatarHtml += "<span class='avatarBox'>";
+                                if(quote.avatarName != undefined && quote.avatarName != null && quote.avatarName != ''){
+                                    avatarHtml += "<img src=\""+quote.avatarPath+"100x100/"+quote.avatarName+"\">";			
+                                }		
+                                if(quote.avatarName == undefined || quote.avatarName == null || quote.avatarName == ''){
+                                    let char = (quote.nickname != null && quote.nickname != '') ? quote.nickname : quote.account;
+                                    let width = 22;//头像宽
+                                    avatarHtml += "<img src=\""+letterAvatar(char, width)+"\">";
+                                    
+                                }
+                                avatarHtml += "</span>";
+								avatarHtml += "<span class='cancelNickname'>已注销</span>";
+                                
+							}
+
+                            let quoteCancelAccountHtml = "";
+                            if(quote.account == null || quote.account == ''){
+                                quoteCancelAccountHtml = "<div class='cancelAccount'>此用户账号已注销</div>";
+                            }
+
+                            quoteContent = "<div class=\"quoteComment\">"+quoteContent+"<span class=\"userName\">"+avatarHtml+"<router-link tag=\"span\" :to=\"{path: '/user/control/home', query: {userName: '"+quote.userName+"'}}\">"+(quote.nickname != null && quote.nickname != '' ? escapeHtml(quote.nickname) : escapeHtml(quote.account))+"</router-link>&nbsp;的评论：</span><br/><div class=\"quoteContent\">"+quote.content+quoteCancelAccountHtml+"</div></div>";
+	
+                            
+                        }
+                        
+                        state.quoteData.set(comment.id, escapeVueHtml(quoteContent));
+                    }
+
+
+                    //回复
+                    if(comment.replyList != null && comment.replyList.length >0){
+                        for (let j = 0; j <comment.replyList.length; j++) {
+                            let reply = comment.replyList[j];
+                            Object.assign(state.editReplyFormView, {[reply.id] : false});
+                            
+                            Object.assign(state.editReplyContentField, {[reply.id] : reply.content});
+                            
+                        }
+                    }
+                    
+
+                    //处理图片放大标签
+                    let contentNode = document.createElement("div");
+                    contentNode.innerHTML = comment.content;
+                    bindNode(contentNode);
+                    comment.content = escapeVueHtml(contentNode.innerHTML);
+                }
+                state.commentList.push.apply(state.commentList,data.records);
+            }
+
+
+            state.totalrecord = parseInt(data.totalrecord);//服务器返回的long类型已转为String类型
+            state.currentpage = data.currentpage;
+            state.totalpage = parseInt(data.totalpage);//服务器返回的long类型已转为String类型
+            state.maxresult = data.maxresult;
+
+            state.isShowPage = true;//显示分页栏
+
+            if(state.totalpage == 0 || state.totalpage == page){//如果没有内容或是最后一页，则不再加载
+                state.isFinished = true;
+            }
+            state.isLoading = false;//加载状态结束
+
+            nextTick(()=>{
+                if(data.records != null && data.records.length > 0){
+                    for (let i = 0; i <data.records.length; i++) {
+                        let comment = data.records[i];
+                        let commentRefValue =  (proxy?.$refs['commentContent_'+comment.id] as any);
+                        if(commentRefValue != undefined){
+                            renderBindNode(commentRefValue[0]); 
+                        }
+                        
+                    }
+                }
+            })
+            
+        })
+        .catch((error: any) =>{
+            state.isError = true;
+            state.isLoading = false;//加载状态结束
+            console.log(error);
+        });
+    }
+    //清除评论列表
+    const clearCommentList = () => {
+        state.quoteData.clear();
+        state.commentList.length =0;
+        state.editReplyContentField = {} as any;
+        state.isFinished = false; 
+
+        for (const [key, value] of Object.entries(state.editCommentEditorMap)){
+            if(value != null){
+                destroyEditor(value);
+            }
+        }
+        state.editCommentEditorMap.clear();
+        state.editCommentEditorCreateParameMap.clear();
+
+        for (const [key, value] of Object.entries(state.quoteEditorMap)){
+            if(value != null){
+                destroyEditor(value);
+            }
+        }
+        state.quoteEditorMap.clear();
+        state.quoteEditorCreateParameMap.clear();
+    }
+
+    //话题气泡弹出框菜单选项
+    const onTopicPopoverActions = (topic:Topic) => {
+        let actions = new Array()
+        if(state.topic.userName == store_systemUser.value.userName){
+            actions.push({ text: '编辑', topicId:topic.id});
+        }
+        return actions;
+    }
+    
+
+
+    //话题气泡弹出框选择
+    const onTopicPopoverSelect = (action:any) => {
+        if(action.text == '编辑'){
+            router.push({path: '/user/editTopic', query:{ topicId : action.topicId}})
+        }
+    }
+
+   
+
+
+     //创建占位播放器(有部分浏览器会对video标签进行劫持，使播放器显示在最顶层,上下滚动时会破坏界面结构)
+     const createPlaceholderPlayer = () => {
+        if(state.placeholder_DPlayer == ""){
+            let dp_placeholder = new DPlayer({
+                container: placeholderVideo.value,//播放器容器元素
+                screenshot: false,//开启截图，如果开启，视频和视频封面需要开启跨域
+                
+                video: {
+                    url: getPageBasePath()+'common/default/pc/video/placeholderVideo.mp4',//占位用，1帧的mp4视频。
+                }
+            });
+            
+            state.placeholder_DPlayer = dp_placeholder;
+        }
+    }
+    //占位播放器播放
+    const playPlaceholderPlayer = (playerId:string) => {
+        if(state.placeholder_DPlayer != ""){
+            if(state.lastPlayerId == playerId){
+                state.placeholder_DPlayer.play();
+            }
+        }
+    }
+
+    //清空播放器
+    const clearVideoPlayer = () => {
+        for(let i=0; i< state.playerObjectList.length; i++){
+            let playerObject = state.playerObjectList[i];
+            
+            playerObject.destroy();//销毁播放器
+        }
+        for(let i=0; i< state.playerHlsList.length; i++){
+            let hls = state.playerHlsList[i];
+            hls.destroy();//销毁视频流
+        }
+
+        if(state.placeholder_DPlayer != ""){
+			state.placeholder_DPlayer.destroy();//销毁播放器
+		}
+
+        state.playerObjectList.length = 0;//清空数组
+        state.playerHlsList.length = 0;//清空数组
+        state.playerIdList.length = 0;//清空数组
+        state.playerNodeList.length = 0;//清空数组
+        state.placeholder_DPlayer = "";
+        state.lastPlayerId = "";
+    }
+
+
+    //渲染视频播放器
+    const renderVideoPlayer = () => {
+        //占位播放器
+        createPlaceholderPlayer();
+
+        for(let i=0; i< state.playerIdList.length; i++){
+            let playerId = state.playerIdList[i];
+            let url = document.getElementById(playerId)?.getAttribute("url");
+            let cover = document.getElementById(playerId)?.getAttribute("cover");//封面
+            let thumbnail = document.getElementById(playerId)?.getAttribute("thumbnail");//缩略图
+            
+            let dp = null as any;
+            if(url == ""){//如果视频处理中
+                dp = new DPlayer({
+                    container: document.getElementById(playerId),//播放器容器元素
+                    screenshot: false,//开启截图，如果开启，视频和视频封面需要开启跨域
+                    
+                    video: {
+                        
+                    }
+                });
+                let dom = document.createElement('div');
+                dom.innerHTML="<div class='dplayer-process'><div class='box'><div class='prompt'>视频处理中，请稍后再刷新</div></div></div>";
+                document.getElementById(playerId)?.appendChild(dom);
+            }else{
+                if(cover != undefined && cover != "" && thumbnail != undefined && thumbnail != ""){//切片视频
+                    let hls = null;
+                    dp = new DPlayer({
+                        container: document.getElementById(playerId),//播放器容器元素
+                        screenshot: false,//开启截图，如果开启，视频和视频封面需要开启跨域
+                        
+                        video: {
+                            url: url,
+                            pic: cover,//视频封面
+                            thumbnails: thumbnail,//视频预览图
+                            type: 'customHls',
+                            customType: {
+                                customHls: function (video:any, player:any) {
+                                    hls = new Hls();
+                                    hls.loadSource(video.src);
+                                    hls.attachMedia(video);
+                                },
+                            },
+                        }
+                    });
+                    state.playerHlsList.push(hls);
+                }else{
+                    dp = new DPlayer({
+                        container: document.getElementById(playerId),//播放器容器元素
+                        screenshot: false,//开启截图，如果开启，视频和视频封面需要开启跨域
+                        
+                        video: {
+                            url: url
+                        }
+                    });
+                }
+                
+            }
+            if(dp != null){
+                dp.on('play', function () {//播放事件
+                    state.lastPlayerId = dp.container.getAttribute('id');
+                });
+                dp.on('pause', function () {//暂停事件
+                    playPlaceholderPlayer(dp.container.getAttribute('id'));
+                });
+            }
+            state.playerObjectList.push(dp);
+        }
+        
+        
+        //添加播放器节点数据
+        if(state.playerObjectList.length >0){
+            
+            for(let i=0; i< state.playerIdList.length; i++){
+                let playerId = state.playerIdList[i];
+                let node = document.getElementById(playerId);//节点对象
+                state.playerNodeList.push(node);
+            }
+        }
+        
+    }
+    //展示/隐藏回复
+    const telescopicReply = (commentId:string) => {
+        let status = state.replyExpandOrShrink.get(commentId);
+        if(status){
+            state.replyExpandOrShrink.set(commentId, false); //收缩
+        }else{
+            state.replyExpandOrShrink.set(commentId, true); //伸展
+        }
+    }
+		
+    //放大图片
+    const onZoomPicture = (imagePath:string) => {
+        ImagePreview({
+            images:[
+                imagePath
+            ],
+            showIndex:false,//是否显示页码
+        });
+    }
+    //话题解锁
+    const onTopicUnhide = (hideType: number,hidePassword: string) => {
+        let formData = new FormData();
+        formData.append('topicId', state.topicId);
+        formData.append('hideType',  String(hideType));
+        if(hideType == 10){
+            if(hidePassword != undefined && hidePassword != ""){
+                formData.append('password',  hidePassword);
+            }else{
+                Notify({ 
+                    type: 'danger', 
+                    message: '密码不能为空'
+                });
+
+                return;
+            }
+        }
+
+        Dialog.confirm({
+            message:'确定解锁?',
+        })
+        .then(() => {
+            proxy?.$axios({
+                url: '/user/control/topic/unhide',
+                method: 'post',
+                data: formData
+            })
+            .then((response: AxiosResponse) => {
+                if(response){
+
+                    const result: any = response.data;
+                
+                    if(JSON.parse(result.success)){
+                        Notify({ 
+                            type: 'success', 
+                            message: '话题解锁成功'
+                        });
+                        //查询话题
+                        queryTopic(state.topicId,()=>{});//调用父组件方法
+                    }else{
+                        //处理错误信息
+                        processErrorInfo(result.error as Map<string,string> ,  error,()=>{});
+                        
+                    }
+                }
+            })
+            .catch((error: any) =>{
+                console.log(error);
+            });
+        })
+        .catch(() => {
+            // on cancel
+        });
+    }
+
+
+    //递归绑定节点参数
+    const bindNode = (node:any) => {
+        
+        
+        //先找到子节点
+        let nodeList = node.childNodes;
+        for(let i = 0;i < nodeList.length;i++){
+            //childNode获取到到的节点包含了各种类型的节点
+            //但是我们只需要元素节点  通过nodeType去判断当前的这个节点是不是元素节点
+            let childNode = nodeList[i];
+            let random = Math.random().toString().slice(2);
+            //判断是否是元素节点。如果节点是元素(Element)节点，则 nodeType 属性将返回 1。如果节点是属性(Attr)节点，则 nodeType 属性将返回 2。
+            if(childNode.nodeType == 1){
+                //处理隐藏内容
+                if(childNode.nodeName.toLowerCase() == "hide" ){
+                    if(childNode.getAttribute("hide-type") == "10"){//输入密码可见
+                        var nodeHtml = "";
+                        nodeHtml += '<div class="hide-box">';
+                        nodeHtml += 	'<Icon name="lock-solid-2" size="52px" class="background-image"></Icon>';
+                        nodeHtml += 	'<div class="background-prompt">此处内容已被隐藏，输入密码可见</div>';
+                        nodeHtml += 	'<div class="input-box">';
+                        nodeHtml += 		'<input type="password" v-model.trim="hide_passwordList['+state.hidePasswordIndex+']" class="text" maxlength="30"  placeholder="密码">';
+     
+                        nodeHtml += 		'<div class="button" @click="onTopicUnhide_renderTemplate(10,'+state.hidePasswordIndex+');">提交</div>';
+                        
+                        nodeHtml += 	'</div>';
+                        nodeHtml += '</div>';
+                        childNode.innerHTML = nodeHtml;
+                        
+                        state.hidePasswordIndex++;
+                    }
+                    else if(childNode.getAttribute("hide-type") == "20"){
+                        var nodeHtml = "";
+                        nodeHtml += '<div class="hide-box">';
+                        nodeHtml += 	'<Icon name="lock-solid-2" size="52px" class="background-image"></Icon>';
+                        nodeHtml += 	'<div class="background-prompt">此处内容已被隐藏，评论话题可见</div>';
+                        nodeHtml += '</div>';
+                        childNode.innerHTML = nodeHtml;
+                        state.isReplyTopicVisible = true;
+                    }else if(childNode.getAttribute("hide-type") == "30"){
+                        var nodeHtml = "";
+                        nodeHtml += '<div class="hide-box">';
+                        nodeHtml += 	'<Icon name="lock-solid-2" size="52px" class="background-image"></Icon>';
+                        nodeHtml += 	'<div class="background-prompt">此处内容已被隐藏，等级达到‘'+escapeHtml(childNode.getAttribute("description"))+'’可见</div>';
+                        nodeHtml += '</div>';
+                        childNode.innerHTML = nodeHtml;
+                    }else if(childNode.getAttribute("hide-type") == "40"){
+                        var nodeHtml = "";
+                        nodeHtml += '<div class="hide-box">';
+                        nodeHtml += 	'<Icon name="lock-solid-2" size="52px" class="background-image"></Icon>';
+                        nodeHtml += 	'<div class="background-prompt">此处内容已被隐藏，支付‘'+childNode.getAttribute("input-value")+'’积分可见</div>';
+                        nodeHtml += 	'<div class="submit-box" @click="onTopicUnhide_renderTemplate(40);">立即购买</div>';
+                        nodeHtml += '</div>';
+                        childNode.innerHTML = nodeHtml;
+                    }else if(childNode.getAttribute("hide-type") == "50"){
+                        var nodeHtml = "";
+                        nodeHtml += '<div class="hide-box">';
+                        nodeHtml += 	'<Icon name="lock-solid-2" size="52px" class="background-image"></Icon>';
+                        nodeHtml += 	'<div class="background-prompt">此处内容已被隐藏，支付 ￥<span class="highlight">'+childNode.getAttribute("input-value")+'</span> 元可见</div>';
+                        nodeHtml += 	'<div class="submit-box" @click="onTopicUnhide_renderTemplate(50);">立即购买</div>';
+                        nodeHtml += '</div>';
+                        childNode.innerHTML = nodeHtml;
+                    }
+                }
+
+                //处理图片
+                if(childNode.nodeName.toLowerCase() == "img" ){
+                    let src = childNode.getAttribute("src");
+                    
+
+                    childNode.removeAttribute("src");//将原节点src属性删除，防止多请求一次
+                
+                    let html = '';
+                    let style = '';
+                    if(childNode.getAttribute("width") != null){//如果是表情，表情图不放大
+                        style = 'style="width: '+childNode.getAttribute("width")+'; height: '+childNode.getAttribute("height")+'"';
+                        html = '<van-image src="'+src+'" '+style+' lazy-load ></van-image>';
+                    
+                      //  html = '<img '+style+' v-lazy="{src:\''+src+'\',loading:\''+state.photo_loading+'\',error:\''+state.photo_error+'\'}" />';
+                    
+                    }else{
+                        //@click方法由RenderTemplate.vue调度处理
+                        html = '<van-image src="'+src+'" '+style+' lazy-load @click="onZoomPicture_renderTemplate(\''+src+'\')"></van-image>';
+                      
+                       // html = '<img '+style+'  v-lazy="{src:\''+src+'\',error:\''+state.photo_error+'\'}" @click="onZoomPicture_renderTemplate(\''+src+'\')"/>';
+                    
+                    }
+                    //创建要替换的元素
+                //	let html = '<el-image src="'+src+'" '+style+' lazy></el-image>';
+                //	let html = '<el-image src="'+src+'" '+style+' :preview-src-list=["http://127.0.0.1:8080/cms/common/tttttt/templates.jpg"] lazy hide-on-click-modal ></el-image>';
+                    
+                
+                   
+                    let placeholder = document.createElement('div');
+                    placeholder.innerHTML = html;
+                    let node = placeholder.childNodes[0];
+                    childNode.parentNode.replaceChild(node,childNode);//替换节点
+
+                }
+                
+                //处理表格 (解决Chrome内核浏览器DPI缩放比例高于100%时部分边框变粗问题，需要CSS配合)
+                if(childNode.nodeName.toLowerCase() == "table" ){
+                    childNode.removeAttribute("border");
+                    childNode.removeAttribute("bordercolor");
+                }
+
+
+                
+                //处理视频标签
+                if(childNode.nodeName.toLowerCase() == "player" ){
+                    
+                    let id = "player_"+random+"_"+i;
+                    childNode.setAttribute("id",id);//设置Id
+                    state.playerIdList.push(id);	
+                }
+
+                
+                //处理代码标签
+                if(childNode.nodeName.toLowerCase() == "pre" ){
+                    let pre_html = childNode.innerHTML;
+                    let class_val = childNode.className;
+                    let lan_class = "";
+                    
+                    let class_arr = new Array();
+                    class_arr = class_val.split(' ');
+                    
+                    for(let k=0; k<class_arr.length; k++){
+                        let className = class_arr[k].trim();
+                        
+                        if(className != null && className != ""){
+                            if (className.lastIndexOf('lang-', 0) === 0) {
+                                lan_class = className;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    childNode.className = "line-numbers "+getLanguageClassName(lan_class);
+                    childNode.setAttribute("data-prismjs-copy","复制");
+                    childNode.setAttribute("data-prismjs-copy-error","按Ctrl+C复制");
+                    childNode.setAttribute("data-prismjs-copy-success","复制成功");
+
+
+                    let nodeHtml = "";
+
+                    //删除code节点
+                    let preChildNodeList = childNode.childNodes;
+                    for(let p = 0;p < preChildNodeList.length;p++){
+                        let preChildNode = preChildNodeList[p];
+                        if(preChildNode.nodeName.toLowerCase() == "code" ){
+                            nodeHtml += preChildNode.innerHTML;
+                            preChildNode.parentNode.removeChild(preChildNode);
+                        }
+                        
+                    }
+                    
+                    let dom = document.createElement('code');
+                    dom.className = "line-numbers "+getLanguageClassName(lan_class);
+                    dom.innerHTML=nodeHtml;
+                    
+                    
+                    childNode.appendChild(dom);
+                
+                }
+                
+                bindNode(childNode);
+
+                
+            }
+        }
+    }
+    
+
+    //递归渲染绑定节点
+    const renderBindNode = (node:any) => {	
+        //先找到子节点
+        let nodeList = node.childNodes;
+        for(let i = 0;i < nodeList.length;i++){
+            //childNode获取到到的节点包含了各种类型的节点
+            //但是我们只需要元素节点  通过nodeType去判断当前的这个节点是不是元素节点
+            let childNode = nodeList[i];
+            let random = Math.random().toString().slice(2);
+            //判断是否是元素节点。如果节点是元素(Element)节点，则 nodeType 属性将返回 1。如果节点是属性(Attr)节点，则 nodeType 属性将返回 2。
+            if(childNode.nodeType == 1){
+                //处理代码标签
+                if(childNode.nodeName.toLowerCase() == "pre" ){
+                    
+                    Prism.highlightAllUnder(childNode);
+                }
+                renderBindNode(childNode);
+            }
+        }
+    }
+
+    
+
+    
+    //查询是否已经关注该用户
+    const queryFollowing = (userName:string) => {
+        //清空信息
+        state.followText = '关注';
+
+        proxy?.$axios({
+            url: '/queryFollowing',
+            method: 'get',
+            params:  {
+                userName:userName
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                const result: any = response.data;
+                if(JSON.parse(result)){
+                    state.followText = '已关注';
+                }
+            }
+        }).catch((error: any) =>{
+            console.log(error);
+        });
+    }
+    //添加关注
+    const addFollow = (userName:string) => {
+        if(state.followText =='关注'){
+            let formData = new FormData();
+            formData.append('userName', userName);
+            
+            proxy?.$axios({
+                url: '/user/control/follow/add',
+                method: 'post',
+                data: formData
+            })
+            .then((response: AxiosResponse) => {
+                if(response){
+
+                    const result: any = response.data;
+                
+                    if(JSON.parse(result.success)){
+                        state.followText ='已关注'
+                    }else{
+                        //处理错误信息
+                        processErrorInfo(result.error as Map<string,string> , error,()=>{});
+
+                        
+
+                    }
+                }
+            })
+            .catch((error: any) =>{
+                console.log(error);
+            });
+    
+        }
+        
+    }
+    //添加收藏
+    const addFavorite = (topicId:string) => {
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            Notify({ 
+                type: 'warning', 
+                message: '请先登录再加入收藏'
+            });
+            return;
+        }
+        if(state.alreadyCollected){
+            return;
+        }
+
+        let formData = new FormData();
+        formData.append('topicId', topicId);
+
+        proxy?.$axios({
+            url: '/user/control/favorite/add',
+            method: 'post',
+            data: formData
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+
+                const result: any = response.data;
+            
+                if(JSON.parse(result.success)){
+                    Notify({ 
+                        type: 'success', 
+                        message: '加入收藏成功'
+                    });
+                    queryAlreadyCollected(topicId);
+                    queryFavoriteCount(topicId);
+
+                }else{
+                    //处理错误信息
+                    processErrorInfo(result.error as Map<string,string> , error,()=>{});
+                }
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    //用户是否已经收藏话题
+    const queryAlreadyCollected = (topicId:string) => {
+        proxy?.$axios({
+            url: '/queryAlreadyCollected',
+            method: 'get',
+            params:  { 
+                topicId: topicId,
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                if(JSON.parse(data)){
+                    state.alreadyCollected = true;
+                }
+            }
+            
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+    //查询话题用户收藏总数
+    const queryFavoriteCount = (topicId:string) => {
+        proxy?.$axios({
+            url: '/queryFavoriteCount',
+            method: 'get',
+            params:  { 
+                topicId: topicId,
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                let count = JSON.parse(data);
+                state.favoriteCount = count;
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    //添加点赞
+    const addLike = (topicId:string) => {
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            Notify({ 
+                type: 'warning', 
+                message: '请先登录再点赞'
+            });
+            return;
+        }
+        if(state.alreadyLiked){
+            return;
+        }
+
+        let formData = new FormData();
+        formData.append('topicId', topicId);
+
+        proxy?.$axios({
+            url: '/user/control/like/add',
+            method: 'post',
+            data: formData
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+
+                const result: any = response.data;
+            
+                if(JSON.parse(result.success)){
+                    Notify({ 
+                        type: 'success', 
+                        message: '给话题点赞成功'
+                    });
+                    queryAlreadyLiked(topicId);
+                    queryLikeCount(topicId);
+
+                }else{
+                    //处理错误信息
+                    processErrorInfo(result.error as Map<string,string> , error,()=>{});
+                }
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+    //用户是否已经点赞话题
+    const queryAlreadyLiked = (topicId:string) => {
+        proxy?.$axios({
+            url: '/queryAlreadyLiked',
+            method: 'get',
+            params:  { 
+                topicId: topicId,
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                if(JSON.parse(data)){
+                    state.alreadyLiked = true;
+                }
+            }
+            
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+    //查询话题用户点赞总数
+    const queryLikeCount = (topicId:string) => {
+        proxy?.$axios({
+            url: '/queryLikeCount',
+            method: 'get',
+            params:  { 
+                topicId: topicId,
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                let count = JSON.parse(data);
+                state.likeCount = count;
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+   
+
+     //刷新验证码
+     const replaceCaptcha = (key:string) => {
+        state.imgUrl.set(key,store.baseURL+"captcha/" + state.captchaKey.get(key) + ".jpg?" + Math.random()) 
+    }
+
+    
+    //校验验证码
+    const checkCaptchaValue = (value: any, callback: any,key:string) => {
+        if(state.captchaKey.get(key) != null && state.captchaKey.get(key) != ''){
+            if (value === '') {
+                return callback('验证码不能为空');
+            }else{
+                if (value.trim().length < 4) {
+                    callback('验证码长度为4个字符')
+                } else {   
+                    
+                    proxy?.$axios({
+                        url: '/userVerification',
+                        method: 'get',
+                        params:  {
+                            captchaKey:state.captchaKey.get(key),
+                            captchaValue:state.captchaValue[key]
+                        },
+                        showLoading: false,//是否显示加载图标
+                        loadingMask:false,// 是否显示遮罩层
+                    })
+                    .then((response: AxiosResponse) => {
+                        if(response){
+                            const result: any = response.data;
+                            if(!JSON.parse(result)){
+                                callback('验证码错误')
+                            }else{
+                                callback();
+                            }
+                        }
+                    }).catch((error: any) =>{
+                        console.log(error);
+                    });
+                }
+
+            }
+        }
+    } 
+
+    //校验验证码规则
+    const checkCaptchaValueRules = (key:string) =>{
+        error.captchaValue.set(key,'');
+        checkCaptchaValue(state.captchaValue[key].trim(), (err:string)=>{
+            if(err != undefined){
+                error.captchaValue.set(key,err);
+            }
+        },key)
+    }
+
+    //评论气泡弹出框菜单选项
+    const onCommentPopoverActions = (comment:Comment) => {
+      //  [{ text: '解锁隐藏标签用户', topicId:topic.id, className:'custom-popoverModule-1'},{ text: '收藏用户', topicId:topic.id, className:'custom-popoverModule-1'},{ text: '点赞用户', topicId:topic.id, className:'custom-popoverModule-1'}]
+    
+        let actions = new Array()
+        if(store_systemUser.value != null && Object.keys(store_systemUser.value).length>0){
+            actions.push({ text: '回复', commentId:comment.id});
+            actions.push({ text: '引用', comment:comment});
+            
+            
+            if(comment.userName ==  store_systemUser.value.userName){
+                actions.push({ text: '编辑', comment:comment});
+                actions.push({ text: '删除', commentId:comment.id});
+            }
+        }
+        return actions;
+    }
+    
+
+
+    //评论气泡弹出框选择
+    const onCommentPopoverSelect = (action:any) => {
+        if(action.text == '回复'){
+            //添加回复表单
+            addReplyUI(action.commentId);
+        }else if(action.text == '引用'){
+            quoteCommentUI(action.comment);
+        }else if(action.text == '编辑'){
+            editCommentUI(action.comment)
+        }else if(action.text == '删除'){
+            onDeleteComment(action.commentId);
+        }
+    }
+   
+    //发表评论表单
+    const addCommentUI = () => {
+        state.popup_addComment = true;
+ 
+        nextTick(()=>{
+            if(state.showCaptcha.get("addComment-"+state.topicId)){
+                replaceCaptcha("addComment-"+state.topicId);//刷新验证码
+            }
+            
+            if (Object.keys(state.addCommentEditorCreateParameObject).length > 0 && Object.keys(state.addCommentEditor).length == 0) {
+            
+                //创建富文本编辑器
+                state.addCommentEditor = createEditor(
+                    addCommentContentEditorToolbarRef.value,
+                    addCommentContentEditorTextRef.value,
+                    state.addCommentEditorCreateParameObject.editorIconList, 
+                    getPageBasePath()+'common/default/', 
+                    state.addCommentEditorCreateParameObject.uploadPath, 
+                    null,
+                    state.fileSystem
+                );
+
+                state.addCommentEditorCreateParameObject.toolbarRef = addCommentContentEditorToolbarRef.value;
+                state.addCommentEditorCreateParameObject.textRef = addCommentContentEditorTextRef.value;              
+            }
+        
+        })
+    }
+    //查询添加评论页
+    const queryAddComment = (topicId:string) => {
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            return;
+        }
+       
+        proxy?.$axios({
+            url: '/queryAddComment',
+            method: 'get',
+            params:  {},
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                state.allowComment = data.allowComment;
+
+                nextTick(()=>{
+                    if(state.topic?.allow && data.allowComment){
+                        //编辑器图标
+                        let editorIconList = new Array();
+                        if(data.availableTag != null && data.availableTag != ''){
+                            let availableTagObject = JSON.parse(data.availableTag);//JSON转为对象
+
+                            if(availableTagObject != null && availableTagObject.length >0){
+                                for(let i=0; i<availableTagObject.length; i++){
+                                    let _availableTag = availableTagObject[i];
+                                    
+                                    if(_availableTag == "code"){//代码
+                                        editorIconList.push("code");
+                                    }else if(_availableTag == "forecolor"){//文字颜色
+                                    //	editorIconList.push("foreColor");
+                                    }else if(_availableTag == "hilitecolor"){//文字背景
+                                    //	editorIconList.push("backColor");
+                                    }else if(_availableTag == "bold"){//粗体
+                                        editorIconList.push("bold");
+                                    }else if(_availableTag == "italic"){//斜体
+                                        editorIconList.push("italic");
+                                    }else if(_availableTag == "underline"){//下划线
+                                        editorIconList.push("underline");
+                                    }else if(_availableTag == "link"){//插入链接
+                                        editorIconList.push("link");
+                                    }else if(_availableTag == "emoticons"){//插入表情
+                                        editorIconList.push("emoticon");
+                                    }else if(_availableTag == "image"){//图片
+                                        editorIconList.push("image");
+                                    }else if(_availableTag == "insertfile"){//文件
+                                        editorIconList.push("file");
+                                    }
+                                }
+                            }
+
+                            state.availableTag = availableTagObject;//话题编辑器允许使用标签
+                        }
+                        
+                        state.fileSystem = data.fileSystem;//文件存储系统
+
+
+                        if (data.captchaKey != undefined && data.captchaKey != '') {
+                            
+                            state.showCaptcha.set("addComment-"+topicId,true)
+                            state.captchaKey.set("addComment-"+topicId,data.captchaKey)
+                            Object.assign(state.captchaValue, {['addComment-'+topicId] : ''});
+                           
+                        }
+
+
+                        if (Object.keys(state.addCommentEditorCreateParameObject).length === 0) {//等于空
+                            let uploadPath = "user/control/comment/uploadImage?topicId="+topicId;
+
+                            state.addCommentEditorCreateParameObject = {
+                                toolbarRef:addCommentContentEditorToolbarRef.value,
+                                textRef:addCommentContentEditorTextRef.value,
+                                editorIconList:editorIconList,
+                                uploadPath:uploadPath,
+                                userGradeList:null
+                            }
+                            
+                        }
+                        
+                    }
+            
+                })
+            }
+            
+
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+
+    }
+    //添加评论 -- 提交数据
+    const onAddCommentFormSubmit = () => {
+        let _key =  "addComment-"+state.topicId;
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        const p1 = new Promise<void>((resolve, reject) => {
+            error.captchaValue.set(_key,'');
+            if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                    checkCaptchaValue(state.captchaValue[_key].trim(), (err:string)=>{
+                        if(err != undefined){
+                            error.captchaValue.set(_key,err);
+                            state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                        }else{
+                            resolve();
+                        }
+                    },_key) 
+                }else{
+                    error.captchaValue.set(_key,"验证码不能为空");
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                }
+            }else{
+                resolve();
+            }
+        });
+
+        Promise.all([p1])
+            .then(() => {
+                //清空所有错误
+                error.content.delete(_key);
+                error.captchaValue.delete(_key);
+                error.comment.delete(_key);
+
+                let formData = new FormData();
+                formData.append('topicId', state.topicId);
+
+                
+                let content =  state.addCommentEditor.txt.html()
+                if(content != null && content !=''){
+                    formData.append('content', content);
+                }
+
+                
+                if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+                    //验证码Key
+                    formData.append('captchaKey', state.captchaKey.get(_key) as string);
+                }
+                
+                //验证码值
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                     formData.append('captchaValue', (state.captchaValue[_key] as string).trim());
+                }
+
+                proxy?.$axios({
+                    url: '/user/control/comment/add',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+
+                        const result: any = response.data;
+                    
+                        if(JSON.parse(result.success)){
+                            // 成功通知
+                            Notify({ 
+                                type: 'success', 
+                                message: '提交成功',
+                                onClose: ()=>{
+                                    
+                                } 
+                            });
+                            state.popup_addComment = false;
+
+                            //清空字段
+                            state.addCommentEditor.txt.clear();//清空
+                            //destroyEditor(state.addCommentEditor);
+                            //state.addCommentEditor.remove();
+                            //state.addCommentEditorCreateParameObject = {};
+
+                            if(state.showCaptcha.get(_key) == true){
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                            }
+
+                            //清除评论列表
+                            clearCommentList();
+                            
+                            state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
+                            queryCommentList(state.topicId,'','',1);
+                            if(state.isReplyTopicVisible){
+                                queryTopic(state.topicId,()=>{});
+                            }
+
+                        }else{
+                            //处理错误信息
+                            for (const [key, value] of Object.entries(result.error) as [string, string][]){
+                                if(key == 'content'){
+                                    error.content.set(_key,value);
+                                }else if(key == 'comment'){
+                                    error.comment.set(_key,value);
+                                }else if(key == 'captchaValue'){
+                                    error.captchaValue.set(_key,value);
+                                }
+                            }
+
+                            if(result.captchaKey != null){
+                                state.showCaptcha.set(_key,true);
+                                state.captchaKey.set(_key,result.captchaKey);
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                                replaceCaptcha(_key);
+                            }else{
+                                state.showCaptcha.set(_key,false);
+                            }
+
+                            
+                        }
+                        state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+
+
+        
+    }
+
+    //引用评论表单
+    const quoteCommentUI = (comment: Comment) => {
+        let _key =  "addQuoteComment-"+comment.id;
+        if(state.quoteFormView[comment.id] == true){//如果已打开
+            return;
+        }
+        
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            return;
+        }
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        proxy?.$axios({
+            url: '/user/queryQuoteComment',
+            method: 'get',
+            params:  {
+                commentId: comment.id
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+
+                state.quoteCommentContent = data.quoteContent;
+
+
+                if(data.allowComment){
+                    Object.assign(state.quoteFormView, {[comment.id] : true});
+
+                    nextTick(()=>{
+                
+
+                        //编辑器图标
+                        let editorIconList = new Array();
+                        if(data.availableTag != null && data.availableTag != ''){
+                            let availableTagObject = JSON.parse(data.availableTag);//JSON转为对象
+
+                            if(availableTagObject != null && availableTagObject.length >0){
+                                for(let i=0; i<availableTagObject.length; i++){
+                                    let _availableTag = availableTagObject[i];
+                                    
+                                    if(_availableTag == "code"){//代码
+                                        editorIconList.push("code");
+                                    }else if(_availableTag == "forecolor"){//文字颜色
+                                    //	editorIconList.push("foreColor");
+                                    }else if(_availableTag == "hilitecolor"){//文字背景
+                                    //	editorIconList.push("backColor");
+                                    }else if(_availableTag == "bold"){//粗体
+                                        editorIconList.push("bold");
+                                    }else if(_availableTag == "italic"){//斜体
+                                        editorIconList.push("italic");
+                                    }else if(_availableTag == "underline"){//下划线
+                                        editorIconList.push("underline");
+                                    }else if(_availableTag == "link"){//插入链接
+                                        editorIconList.push("link");
+                                    }else if(_availableTag == "emoticons"){//插入表情
+                                        editorIconList.push("emoticon");
+                                    }else if(_availableTag == "image"){//图片
+                                        editorIconList.push("image");
+                                    }else if(_availableTag == "insertfile"){//文件
+                                        editorIconList.push("file");
+                                    }
+                                }
+                            }
+                        }
+
+                        
+                        state.fileSystem = data.fileSystem;//文件存储系统
+                       
+
+                        if (data.captchaKey != undefined && data.captchaKey != '') {
+                            
+                            state.showCaptcha.set(_key,true)
+                            state.captchaKey.set(_key,data.captchaKey)
+                            Object.assign(state.captchaValue, {[_key] : ''});
+                            replaceCaptcha(_key);//刷新验证码
+                        }
+
+                        if (state.quoteEditorCreateParameMap.get(comment.id) == null || Object.keys(state.quoteEditorCreateParameMap.get(comment.id)).length === 0) {//等于空
+                            let uploadPath = "user/control/comment/uploadImage?topicId="+state.topicId;
+                    
+                                                                                      
+                            let quoteCommentContentEditorToolbarRefValue = (proxy?.$refs['quoteCommentContentEditorToolbarRef_'+comment.id] as any)[0];
+                            let quoteCommentContentEditorTextRefValue = (proxy?.$refs['quoteCommentContentEditorTextRef_'+comment.id] as any)[0];
+                            
+                            //创建富文本编辑器
+                            let editor = createEditor(
+                                quoteCommentContentEditorToolbarRefValue,
+                                quoteCommentContentEditorTextRefValue,
+                                editorIconList, 
+                                getPageBasePath()+'common/default/', 
+                                uploadPath, 
+                                null,
+                                state.fileSystem
+                            );
+                            state.quoteEditorMap.set(comment.id,editor);
+
+                            state.quoteEditorCreateParameMap.set(comment.id, {
+                                    toolbarRef:quoteCommentContentEditorToolbarRefValue,
+                                    textRef:quoteCommentContentEditorTextRefValue,
+                                    editorIconList:editorIconList,
+                                    uploadPath:uploadPath,
+                                    userGradeList:null
+                            })
+
+                        }
+                    })
+
+                    state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                }else{
+                    Notify({ 
+                        type: 'warning', 
+                        message: '不允许引用评论',
+                        onClose: ()=>{
+                            
+                        } 
+                    });
+                }
+            }
+            
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    
+    //引用评论 -- 提交数据
+    const onQuoteCommentFormSubmit = (commentId:string) => {
+        let _key =  "addQuoteComment-"+commentId;
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        const p1 = new Promise<void>((resolve, reject) => {
+            error.captchaValue.set(_key,'');
+            if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                    checkCaptchaValue(state.captchaValue[_key].trim(), (err:string)=>{
+                        if(err != undefined){
+                            error.captchaValue.set(_key,err);
+                            state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                        }else{
+                            resolve();
+                        }
+                    },_key) 
+                }else{
+                    error.captchaValue.set(_key,"验证码不能为空");
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                }
+            }else{
+                resolve();
+            }
+        });
+
+        Promise.all([p1])
+            .then(() => {
+                //清空所有错误
+                error.content.delete(_key);
+                error.captchaValue.delete(_key);
+                error.comment.delete(_key);
+
+                let formData = new FormData();
+                formData.append('commentId', commentId);
+
+
+                let quoteEditor = state.quoteEditorMap.get(commentId);
+                if(quoteEditor != null){
+                    let content =  quoteEditor.txt.html()
+                    if(content != null && content !=''){
+                        formData.append('content', content);
+                    }
+                }
+                
+                if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+                    //验证码Key
+                    formData.append('captchaKey', state.captchaKey.get(_key) as string);
+                }
+                
+                //验证码值
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                     formData.append('captchaValue', (state.captchaValue[_key] as string).trim());
+                }
+
+                proxy?.$axios({
+                    url: '/user/control/comment/addQuote',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+
+                        const result: any = response.data;
+                    
+                        if(JSON.parse(result.success)){
+                            // 成功通知
+                            Notify({ 
+                                type: 'success', 
+                                message: '提交成功',
+                                onClose: ()=>{
+                                    
+                                } 
+                            });
+                           
+
+                            if(quoteEditor != null){
+                                destroyEditor(quoteEditor);
+                                state.quoteEditorMap.delete(commentId);
+                                state.quoteEditorCreateParameMap.delete(commentId);
+                            }
+                            Object.assign(state.quoteFormView, {[commentId] : false});
+
+                            //重置表单
+                            //formAddCommentRef.value?.resetFields();
+                            if(state.showCaptcha.get(_key) == true){
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                            }
+
+                            //清除评论列表
+                            clearCommentList();
+
+                            state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
+                            queryCommentList(state.topicId,'','',1);
+
+                        }else{
+                            //处理错误信息
+                            for (const [key, value] of Object.entries(result.error) as [string, string][]){
+                                if(key == 'content'){
+                                    error.content.set(_key,value);
+                                }else if(key == 'comment'){
+                                    error.comment.set(_key,value);
+                                }else if(key == 'captchaValue'){
+                                    error.captchaValue.set(_key,value);
+                                }
+                            }
+
+                            if(result.captchaKey != null){
+                                state.showCaptcha.set(_key,true);
+                                state.captchaKey.set(_key,result.captchaKey);
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                                replaceCaptcha(_key);
+                            }else{
+                                state.showCaptcha.set(_key,false);
+                            }
+
+                            
+                        }
+                        state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+    }
+
+    
+    //修改评论表单
+    const editCommentUI = (comment: Comment) => {
+        let _key =  "editComment-"+comment.id;
+        if(state.editCommentFormView[comment.id] == true){//如果已打开
+            return;
+        }
+        
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            return;
+        }
+
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        proxy?.$axios({
+            url: '/user/queryEditComment',
+            method: 'get',
+            params:  {
+                commentId: comment.id
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            let data =  response.data;
+
+            let _comment = data.comment;
+
+            if(data.allowComment && _comment != undefined){
+                Object.assign(state.editCommentFormView, {[comment.id] : true});
+
+                nextTick(()=>{
+               
+
+                    //编辑器图标
+                    let editorIconList = new Array();
+                    if(data.availableTag != null && data.availableTag != ''){
+                        let availableTagObject = JSON.parse(data.availableTag);//JSON转为对象
+
+                        if(availableTagObject != null && availableTagObject.length >0){
+                            for(let i=0; i<availableTagObject.length; i++){
+                                let _availableTag = availableTagObject[i];
+                                
+                                if(_availableTag == "code"){//代码
+                                    editorIconList.push("code");
+                                }else if(_availableTag == "forecolor"){//文字颜色
+                                //	editorIconList.push("foreColor");
+                                }else if(_availableTag == "hilitecolor"){//文字背景
+                                //	editorIconList.push("backColor");
+                                }else if(_availableTag == "bold"){//粗体
+                                    editorIconList.push("bold");
+                                }else if(_availableTag == "italic"){//斜体
+                                    editorIconList.push("italic");
+                                }else if(_availableTag == "underline"){//下划线
+                                    editorIconList.push("underline");
+                                }else if(_availableTag == "link"){//插入链接
+                                    editorIconList.push("link");
+                                }else if(_availableTag == "emoticons"){//插入表情
+                                    editorIconList.push("emoticon");
+                                }else if(_availableTag == "image"){//图片
+                                    editorIconList.push("image");
+                                }else if(_availableTag == "insertfile"){//文件
+                                    editorIconList.push("file");
+                                }
+                            }
+                        }
+                    }
+                    
+                    state.fileSystem = data.fileSystem;//文件存储系统
+
+
+                    if (data.captchaKey != undefined && data.captchaKey != '') {
+                        
+                        state.showCaptcha.set(_key,true)
+                        state.captchaKey.set(_key,data.captchaKey)
+                        Object.assign(state.captchaValue, {[_key] : ''});
+                        replaceCaptcha(_key);//刷新验证码
+                    }
+
+
+                    if (state.editCommentEditorCreateParameMap.get(comment.id) == null || Object.keys(state.editCommentEditorCreateParameMap.get(comment.id)).length === 0) {//等于空
+                        let uploadPath = "user/control/comment/uploadImage?topicId="+state.topicId;
+                
+                                                                                    
+                        let editCommentContentEditorToolbarRefValue = (proxy?.$refs['editCommentContentEditorToolbarRef_'+comment.id] as any)[0];
+                        let editCommentContentEditorTextRefValue = (proxy?.$refs['editCommentContentEditorTextRef_'+comment.id] as any)[0];
+                        
+                        //创建富文本编辑器
+                        let editor = createEditor(
+                            editCommentContentEditorToolbarRefValue,
+                            editCommentContentEditorTextRefValue,
+                            editorIconList, 
+                            getPageBasePath()+'common/default/', 
+                            uploadPath, 
+                            null,
+                            state.fileSystem
+                        );
+                        editor.txt.html(_comment.content);//初始化内容
+                        state.editCommentEditorMap.set(comment.id,editor);
+
+                        state.editCommentEditorCreateParameMap.set(comment.id, {
+                                toolbarRef:editCommentContentEditorToolbarRefValue,
+                                textRef:editCommentContentEditorTextRefValue,
+                                editorIconList:editorIconList,
+                                uploadPath:uploadPath,
+                                userGradeList:null
+                        })
+
+                    }
+        
+                })
+
+                state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+            }else{
+                if(!data.allowComment){
+                    Notify({ 
+                        type: 'warning', 
+                        message: '不允许修改评论',
+                        onClose: ()=>{
+                            
+                        } 
+                    });
+                }
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+    
+    //修改评论 -- 提交数据
+    const onEditCommentFormSubmit = (commentId:string) => {
+        let _key =  "editComment-"+commentId;
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        const p1 = new Promise<void>((resolve, reject) => {
+            error.captchaValue.set(_key,'');
+            if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                    checkCaptchaValue(state.captchaValue[_key].trim(), (err:string)=>{
+                        if(err != undefined){
+                            error.captchaValue.set(_key,err);
+                            state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                        }else{
+                            resolve();
+                        }
+                    },_key) 
+                }else{
+                    error.captchaValue.set(_key,"验证码不能为空");
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                }
+            }else{
+                resolve();
+            }
+        });
+
+        Promise.all([p1])
+            .then(() => {
+                //清空所有错误
+                error.content.delete(_key);
+                error.captchaValue.delete(_key);
+                error.comment.delete(_key);
+
+                let formData = new FormData();
+                formData.append('commentId', commentId);
+
+
+                let editCommentEditor = state.editCommentEditorMap.get(commentId);
+                if(editCommentEditor != null){
+                    let content =  editCommentEditor.txt.html()
+                    if(content != null && content !=''){
+                        formData.append('content', content);
+                    }
+                }
+
+                
+                if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+                    //验证码Key
+                    formData.append('captchaKey', state.captchaKey.get(_key) as string);
+                }
+                
+                //验证码值
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                     formData.append('captchaValue', (state.captchaValue[_key] as string).trim());
+                }
+
+                proxy?.$axios({
+                    url: '/user/control/comment/edit',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+
+                        const result: any = response.data;
+                    
+                        if(JSON.parse(result.success)){
+                            // 成功通知
+                            Notify({ 
+                                type: 'success', 
+                                message: '提交成功',
+                                onClose: ()=>{
+                                    
+                                } 
+                            });
+                           
+
+                            let editCommentEditor = state.editCommentEditorMap.get(commentId);
+                            if(editCommentEditor != null){
+                                destroyEditor(editCommentEditor);
+                                state.editCommentEditorMap.delete(commentId);
+                                state.editCommentEditorCreateParameMap.delete(commentId);
+                            }
+                            Object.assign(state.editCommentFormView, {[commentId] : false});
+
+
+                            //重置表单
+                            //formAddCommentRef.value?.resetFields();
+                            if(state.showCaptcha.get(_key) == true){
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                            }
+
+                            //清除评论列表
+                            clearCommentList();
+
+                            state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
+                            queryCommentList(state.topicId,'','',1);
+                        }else{
+                            //处理错误信息
+                            for (const [key, value] of Object.entries(result.error) as [string, string][]){
+                                if(key == 'content'){
+                                    error.content.set(_key,value);
+                                }else if(key == 'comment'){
+                                    error.comment.set(_key,value);
+                                }else if(key == 'captchaValue'){
+                                    error.captchaValue.set(_key,value);
+                                }
+                            }
+
+                            if(result.captchaKey != null){
+                                state.showCaptcha.set(_key,true);
+                                state.captchaKey.set(_key,result.captchaKey);
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                                replaceCaptcha(_key);
+                            }else{
+                                state.showCaptcha.set(_key,false);
+                            }
+
+                            
+                        }
+                        state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+    }
+
+    //删除评论
+    const onDeleteComment = (commentId:string) => {
+        Dialog.confirm({
+            message:'确定删除评论?',
+        })
+        .then(() => {
+            let formData = new FormData();
+            formData.append('commentId', commentId);
+
+            proxy?.$axios({
+                url: '/user/control/comment/delete',
+                method: 'post',
+                data: formData
+            })
+            .then((response: AxiosResponse) => {
+                if(response){
+
+                    const result: any = response.data;
+                
+                    if(JSON.parse(result.success)){
+                        Notify({ 
+                            type: 'success', 
+                            message: '删除成功',
+                            onClose: ()=>{
+                                
+                            } 
+                        });
+        
+
+                        let editCommentEditor = state.editCommentEditorMap.get(commentId);
+                        if(editCommentEditor != null){
+                            destroyEditor(editCommentEditor);
+                            state.editCommentEditorMap.delete(commentId);
+                            state.editCommentEditorCreateParameMap.delete(commentId);
+                        }
+                        Object.assign(state.editCommentFormView, {[commentId] : false});
+
+                        let quoteEditor = state.quoteEditorMap.get(commentId);
+                        if(quoteEditor != null){
+                            destroyEditor(quoteEditor);
+                            state.quoteEditorMap.delete(commentId);
+                            state.quoteEditorCreateParameMap.delete(commentId);
+                        }
+                        Object.assign(state.quoteFormView, {[commentId] : false});
+
+
+
+                        if(state.commentList != null && state.commentList.length > 0){
+                            for(let i = state.commentList.length - 1; i >= 0; i--){ 
+                                let comment = state.commentList[i];
+                                if(comment.id == commentId){
+                                    state.commentList.splice(i, 1);
+                                    break;
+                                }
+                            }
+                        }
+                    }else{
+                        //处理错误信息
+                        processErrorInfo(result.error as Map<string,string> , reactive({}),()=>{});
+
+
+                        
+                    }
+                }
+            })
+            .catch((error: any) =>{
+                console.log(error);
+            });
+        })
+        .catch(() => {
+            // on cancel
+        });
+    }
+
+
+
+    //回复气泡弹出框菜单选项
+    const onReplyPopoverActions = (reply:Reply) => {
+        let actions = new Array()
+        if(store_systemUser.value != null && Object.keys(store_systemUser.value).length>0 && reply.userName ==  store_systemUser.value.userName){
+            actions.push({ text: '编辑', reply:reply});
+            actions.push({ text: '删除', replyId:reply.id});
+        }
+        return actions;
+    }
+    
+
+
+    //回复气泡弹出框选择
+    const onReplyPopoverSelect = (action:any) => {
+        
+        if(action.text == '编辑'){
+           editReplyUI(action.reply)
+        }else if(action.text == '删除'){
+            onDeleteReply(action.replyId);
+        }
+    }
+    //添加回复表单
+    const addReplyUI = (commentId:string) => {
+        let _key =  "addReply-"+commentId;
+        if(state.addReplyFormView[commentId] == true){//如果已打开
+			return;
+		}
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            return;
+        }
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+
+        proxy?.$axios({
+            url: '/user/queryAddReply',
+            method: 'get',
+            params:  {
+                commentId: commentId
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                if(data.allowReply){
+                    Object.assign(state.addReplyFormView, {[commentId] : true});
+
+                    if (data.captchaKey != undefined && data.captchaKey != '') {
+                        
+                        state.showCaptcha.set(_key,true)
+                        state.captchaKey.set(_key,data.captchaKey)
+                        Object.assign(state.captchaValue, {[_key] : ''});
+                        replaceCaptcha(_key);//刷新验证码
+                    }
+
+                    state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                }else{
+                    Notify({ 
+                        type: 'warning', 
+                        message: '不允许添加回复',
+                        onClose: ()=>{
+                            
+                        } 
+                    });
+                }
+            }
+            
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    //添加回复 -- 提交数据
+    const onAddReply = (commentId:string) => {
+        let _key =  "addReply-"+commentId;
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        const p1 = new Promise<void>((resolve, reject) => {
+            error.captchaValue.set(_key,'');
+            if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                    checkCaptchaValue(state.captchaValue[_key].trim(), (err:string)=>{
+                        if(err != undefined){
+                            error.captchaValue.set(_key,err);
+                            state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                        }else{
+                            resolve();
+                        }
+                    },_key) 
+                }else{
+                    error.captchaValue.set(_key,"验证码不能为空");
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                }
+            }else{
+                resolve();
+            }
+        });
+
+        Promise.all([p1])
+            .then(() => {
+                //清空所有错误
+                error.replyContent.delete(_key);
+                error.captchaValue.delete(_key);
+                error.reply.delete(_key);
+
+                let formData = new FormData();
+                formData.append('commentId', commentId);
+
+                if(state.commentList != null && state.commentList.length > 0){
+                    for (let i = 0; i <state.commentList.length; i++) {
+                        let comment = state.commentList[i];
+                        if(comment.id == commentId){
+                            formData.append('content',  state.addReplyContentField[i]);
+                            break; 
+                        }
+                    }
+                }
+                
+                if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+                    //验证码Key
+                    formData.append('captchaKey', state.captchaKey.get(_key) as string);
+                }
+                
+                //验证码值
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                     formData.append('captchaValue', (state.captchaValue[_key] as string).trim());
+                }
+
+                proxy?.$axios({
+                    url: '/user/control/comment/addReply',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+
+                        const result: any = response.data;
+                    
+                        if(JSON.parse(result.success)){
+                            Notify({ 
+                                type: 'success', 
+                                message: '提交成功',
+                                onClose: ()=>{
+                                    
+                                } 
+                            });
+
+                            
+                            if(state.commentList != null && state.commentList.length > 0){
+                                for (let i = 0; i <state.commentList.length; i++) {
+                                    let comment = state.commentList[i];
+                                    if(comment.id == commentId){
+                                        state.addReplyContentField[i] = "";//清空
+                                        break; 
+                                    }
+                                    
+                                }
+                            }
+                            Object.assign(state.addReplyFormView, {[commentId] : false});
+
+
+                            //重置表单
+                            //formAddCommentRef.value?.resetFields();
+                            if(state.showCaptcha.get(_key) == true){
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                            }
+
+                            //清除评论列表
+                            clearCommentList();
+
+                            state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
+                            queryCommentList(state.topicId,'','',1);
+
+                        }else{
+                            //处理错误信息
+                            for (const [key, value] of Object.entries(result.error) as [string, string][]){
+                                if(key == 'content'){
+                                    error.replyContent.set(_key,value);
+                                }else if(key == 'reply'){
+                                    error.reply.set(_key,value);
+                                }else if(key == 'captchaValue'){
+                                    error.captchaValue.set(_key,value);
+                                }
+                            }
+
+                            if(result.captchaKey != null){
+                                state.showCaptcha.set(_key,true);
+                                state.captchaKey.set(_key,result.captchaKey);
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                                replaceCaptcha(_key);
+                            }else{
+                                state.showCaptcha.set(_key,false);
+                            }
+
+                            
+                        }
+                        state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+    }
+
+    //修改回复表单
+    const editReplyUI = (reply:Reply) => {
+        let _key =  "editReply-"+reply.id;
+        if(state.editReplyFormView[reply.id] == true){//如果已打开
+			return;
+		} 
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            return;
+        }
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+       
+
+        proxy?.$axios({
+            url: '/user/queryEditReply',
+            method: 'get',
+            params:  {
+                replyId: reply.id
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                let _reply = data.reply;
+                if(data.allowReply && _reply != undefined){
+                    Object.assign(state.editReplyFormView, {[reply.id] : true});
+
+                    if (data.captchaKey != undefined && data.captchaKey != '') {
+                        
+                        state.showCaptcha.set(_key,true)
+                        state.captchaKey.set(_key,data.captchaKey)
+                        Object.assign(state.captchaValue, {[_key] : ''});
+                        replaceCaptcha(_key);//刷新验证码
+                    }
+
+                    state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                }else{
+                    if(!data.allowReply){
+                        Notify({ 
+                            type: 'warning', 
+                            message: '不允许修改回复',
+                            onClose: ()=>{
+                                
+                            } 
+                        });
+                    }
+                }
+            }
+            
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+
+    }
+
+    //修改回复 -- 提交数据
+    const onEditReply = (replyId:string) => {
+        let _key =  "editReply-"+replyId;
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        const p1 = new Promise<void>((resolve, reject) => {
+            error.captchaValue.set(_key,'');
+            if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                    checkCaptchaValue(state.captchaValue[_key].trim(), (err:string)=>{
+                        if(err != undefined){
+                            error.captchaValue.set(_key,err);
+                            state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                        }else{
+                            resolve();
+                        }
+                    },_key) 
+                }else{
+                    error.captchaValue.set(_key,"验证码不能为空");
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                }
+            }else{
+                resolve();
+            }
+        });
+
+        Promise.all([p1])
+            .then(() => {
+                //清空所有错误
+                error.replyContent.delete(_key);
+                error.captchaValue.delete(_key);
+                error.reply.delete(_key);
+
+                let formData = new FormData();
+                formData.append('replyId', replyId);
+
+                formData.append('content', state.editReplyContentField[replyId]); 
+
+                
+                
+                if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+                    //验证码Key
+                    formData.append('captchaKey', state.captchaKey.get(_key) as string);
+                }
+                
+                //验证码值
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                     formData.append('captchaValue', (state.captchaValue[_key] as string).trim());
+                }
+
+                proxy?.$axios({
+                    url: '/user/control/comment/editReply',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+
+                        const result: any = response.data;
+                    
+                        if(JSON.parse(result.success)){
+                            Notify({ 
+                                type: 'success', 
+                                message: '提交成功',
+                                onClose: ()=>{
+                                    
+                                } 
+                            });
+                           
+                            Object.assign(state.editReplyFormView, {[replyId] : false});
+
+
+                            //重置表单
+                            //formAddCommentRef.value?.resetFields();
+                            if(state.showCaptcha.get(_key) == true){
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                            }
+
+                            //清除评论列表
+                            clearCommentList();
+
+                            state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
+                            queryCommentList(state.topicId,'','',1);
+
+                        }else{
+                            //处理错误信息
+                            for (const [key, value] of Object.entries(result.error) as [string, string][]){
+                                if(key == 'content'){
+                                    error.replyContent.set(_key,value);
+                                }else if(key == 'reply'){
+                                    error.reply.set(_key,value);
+                                }else if(key == 'captchaValue'){
+                                    error.captchaValue.set(_key,value);
+                                }
+                            }
+
+                            if(result.captchaKey != null){
+                                state.showCaptcha.set(_key,true);
+                                state.captchaKey.set(_key,result.captchaKey);
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                                replaceCaptcha(_key);
+                            }else{
+                                state.showCaptcha.set(_key,false);
+                            }
+
+                            
+                        }
+                        state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+    }
+    //删除回复
+    const onDeleteReply = (replyId:string) => {
+        Dialog.confirm({
+            message:'确定删除回复?',
+        })
+        .then(() => {
+            let _key =  "addReply-"+replyId;
+            let _key2 =  "editReply-"+replyId;
+
+            //清空所有错误
+            error.replyContent.delete(_key);
+            error.captchaValue.delete(_key);
+            error.reply.delete(_key);
+
+            error.replyContent.delete(_key2);
+            error.captchaValue.delete(_key2);
+            error.reply.delete(_key2);
+            let formData = new FormData();
+            formData.append('replyId', replyId);
+
+            proxy?.$axios({
+                url: '/user/control/comment/deleteReply',
+                method: 'post',
+                data: formData
+            })
+            .then((response: AxiosResponse) => {
+                if(response){
+
+                    const result: any = response.data;
+                
+                    if(JSON.parse(result.success)){
+                        Notify({ 
+                            type: 'success', 
+                            message: '删除成功',
+                            onClose: ()=>{
+                                
+                            } 
+                        });
+
+                        delete state.addReplyFormView[replyId];
+                        delete state.editReplyFormView[replyId];
+                        delete state.editReplyContentField[replyId];
+
+                        //重置表单
+                        //formAddCommentRef.value?.resetFields();
+                        if(state.showCaptcha.get(_key) == true){
+                            Object.assign(state.captchaValue, {[_key] : ''});
+                        }
+
+                        
+                        if(state.commentList != null && state.commentList.length > 0){
+                            for(let i = state.commentList.length - 1; i >= 0; i--){ 
+                                let comment = state.commentList[i];
+                                if(comment.replyList != null && comment.replyList.length >0){
+                                    for(let j = comment.replyList.length - 1; j >= 0; j--){ 
+                                        let reply = comment.replyList[j];
+                                        if(reply.id == replyId){
+                                            comment.replyList.splice(j, 1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }else{
+                        //处理错误信息
+                        processErrorInfo(result.error as Map<string,string> , reactive({}),()=>{});
+                    }
+                }
+            })
+            .catch((error: any) =>{
+                console.log(error);
+            });
+
+        })
+        .catch(() => {
+            // on cancel
+        });
+
+    }
+
+     //查询发红包内容
+     const queryGiveRedEnvelopeContent = (giveRedEnvelopeId:string) => {
+        proxy?.$axios({
+            url: '/queryGiveRedEnvelopeContent',
+            method: 'get',
+            params:  {
+                giveRedEnvelopeId:giveRedEnvelopeId
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            return response?.data;
+        })
+        .then((data: GiveRedEnvelope) => {
+
+            state.giveRedEnvelope = {} as GiveRedEnvelope;
+           
+            if(data){
+                state.giveRedEnvelope = data;
+                if(state.giveRedEnvelope.nickname != null && state.giveRedEnvelope.nickname !=''){
+                    state.giveRedEnvelope.avatar = letterAvatar(state.giveRedEnvelope.nickname, 48);
+                }else{
+                    state.giveRedEnvelope.avatar = letterAvatar(state.giveRedEnvelope.account, 48);
+                }
+            }
+            
+        }).catch((error: any) =>{
+            console.log(error);
+        });
+    }
+    //查询领取红包用户列表
+    const queryReceiveRedEnvelopeUser = (giveRedEnvelopeId:string, page:number) => {
+        proxy?.$axios({
+            url: '/queryReceiveRedEnvelopeUser',
+            method: 'get',
+            params:  {
+                giveRedEnvelopeId:giveRedEnvelopeId,
+                page : page
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            return response?.data;
+        })
+        .then((data: PageView<ReceiveRedEnvelope>) => {
+           
+            if(data && data.records != null && data.records.length >0){
+
+                let receiveRedEnvelopeList = data.records;
+                if (receiveRedEnvelopeList != null && receiveRedEnvelopeList.length > 0) {
+                    for(var i=0;i<receiveRedEnvelopeList.length; i++){
+                        let receiveRedEnvelope = receiveRedEnvelopeList[i] as ReceiveRedEnvelope;
+                        if(receiveRedEnvelope.receiveNickname != null && receiveRedEnvelope.receiveNickname !=''){
+                            receiveRedEnvelope.receiveAvatar = letterAvatar(receiveRedEnvelope.receiveNickname, 32);
+                        }else{
+                            receiveRedEnvelope.receiveAvatar = letterAvatar(receiveRedEnvelope.receiveAccount, 32);
+                        }
+                        state.receiveRedEnvelopeList.push(receiveRedEnvelope);
+                    }
+                }
+
+                //显示更多
+                if(parseInt(data.totalrecord) != state.receiveRedEnvelopeList.length){
+                    
+                    state.receiveRedEnvelope_more = true;
+                }else{
+                    state.receiveRedEnvelope_more = false;
+                }
+                state.receiveRedEnvelopeCurrentPage = data.currentpage;
+            }
+
+        }).catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+
+    //抢红包
+    const grabRedEnvelope = (giveRedEnvelopeId:string) => {
+        let formData = new FormData();
+        formData.append('giveRedEnvelopeId', giveRedEnvelopeId);
+        
+        proxy?.$axios({
+            url: '/user/control/redEnvelope/addReceiveRedEnvelope',
+            method: 'post',
+            data: formData
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+
+                const result: any = response.data;
+            
+                if(JSON.parse(result.success)){
+                    
+                    let receiveRedEnvelopeAmount = result.receiveRedEnvelopeAmount
+                    Notify({ 
+                        type: 'success', 
+                        message: "抢到 "+receiveRedEnvelopeAmount+" 元红包",
+                        onClose: ()=>{
+                            
+                        } 
+                    });
+
+                    nextTick(()=>{
+                        state.receiveRedEnvelopeList.length = 0;//清空数组
+                        queryGiveRedEnvelopeContent(giveRedEnvelopeId);
+                        queryReceiveRedEnvelopeUser(giveRedEnvelopeId,1);
+
+                    })
+                }else{
+                    //处理错误信息
+                    processErrorInfo(result.error as Map<string,string> , reactive({}),()=>{});
+
+                    
+
+                }
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+    let ii =0;
+    //计算红包气泡弹出框位置
+    const onReceiveRedEnvelopePopoverLocation = (receiveRedEnvelopeId:string) => {
+        let receiveRedEnvelopecRefValue = (proxy?.$refs['receiveRedEnvelopec_'+receiveRedEnvelopeId] as any)[0];
+       
+        let clientWidth = document.documentElement.clientWidth;
+        
+
+
+        if((receiveRedEnvelopecRefValue.offsetLeft+12) > (clientWidth/2)){
+            state.receiveRedEnvelopePlacement.set(receiveRedEnvelopeId,'top-end')
+        }else{
+            state.receiveRedEnvelopePlacement.set(receiveRedEnvelopeId,'top-start')
+        }
+    }
+    
+    //查询相似话题
+    const queryLikeTopic = (topicId:string) => {
+        proxy?.$axios({
+            url: '/queryLikeTopic',
+            method: 'get',
+            params:  {
+                topicId:topicId
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            return response?.data;
+        })
+        .then((data: Array<Topic>) => {
+            state.likeTopicList.length =0;
+
+            if(data){
+                state.likeTopicList = data;
+            }
+        }).catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+
+    //导航守卫
+    onBeforeRouteUpdate((to, from, next) => {
+        if(to.name == 'thread'){
+            if(to.query.topicId != undefined){
+                state.topicId = to.query.topicId as string
+            }
+            //删除缓存
+            store.setCacheNumber(to.name)
+        }
+        next();
+    });
+
+
+
+    onMounted(() => {
+        
+        state.topicId = router.currentRoute.value.query.topicId != undefined ?router.currentRoute.value.query.topicId as string :'';
+        init();
+
+        //设置缓存
+        store.setCacheComponents(String(router.currentRoute.value.name))
+    }) 
+
+    //卸载组件实例后调用
+    onUnmounted (()=>{
+        //清除播放器
+        clearVideoPlayer();
+
+    })
+
+    //初始化
+    const init = () => {
+        queryTopic(state.topicId,()=>{
+            queryAddComment(state.topicId);
+            queryFollowing(state.topic.userName);//查询是否已关注该用户
+            queryGiveRedEnvelopeContent(state.topic.giveRedEnvelopeId);
+            queryReceiveRedEnvelopeUser(state.topic.giveRedEnvelopeId, 1)
+        });
+        
+        queryAlreadyCollected(state.topicId);
+        queryFavoriteCount(state.topicId);
+        queryAlreadyLiked(state.topicId);
+        queryLikeCount(state.topicId);
+        queryLikeTopic(state.topicId);
+    }
+
+    //进入keep-alive组件时触发
+    onActivated(()=>{
+        //后退时修改浏览器标题
+        let titleValue = store_title.value
+        if(titleValue != null && titleValue != '' && state.topic != null && Object.keys(state.topic).length > 0){
+            document.title = (state.topic.title != null ? state.topic.title : '')+ ' - ' + titleValue;
+        }
+    })
+</script>
+<style scoped lang="scss">
+.topicContentModule{
+    margin: var(--van-cell-group-inset-padding);
+    .head{
+        padding: 12px 12px 12px 12px;
+        border-radius: var(--van-border-radius-lg);
+        background: #fff;
+        .container{
+            display: flex;
+            align-items:center;
+            .left-layout{
+                .avatarImg{
+                    img {
+                        width: 40px;
+                        height: 40px;
+                        border-radius:40px;
+                        vertical-align: middle;
+                    }
+                }
+            }
+            .middle-layout{
+                flex: 1;
+                margin-left: 10px;
+                margin-right: 10px;
+                .userInfo{
+                    display: flex; 
+                    align-items: center;
+                    flex-wrap: wrap;
+                    .cancelAccount{
+                        display: inline-block;
+                        vertical-align: middle;
+                        padding: 4px 4px;
+                        font-size: 12px;
+                        line-height: 12px;
+                        -webkit-border-radius: 2px;
+                        -moz-border-radius: 2px;
+                        border-radius: 2px;
+                        color: var(--van-gray-5);
+                        background-color: var(--van-gray-1);
+                        position: relative;
+                        left: -5px;
+                        margin-top: 2px;
+                        margin-bottom: 2px;
+                    }
+                    .account{
+                        color: var(--van-gray-7);
+                        margin-right: 5px;
+                        position: relative;
+                        top: -2px;
+                    }  
+                    .userRoleName{
+                        display: inline-block;
+                        white-space:nowrap;
+                        vertical-align: middle;
+                        padding: 3px 4px;
+                        margin-right: 5px;
+                        margin-bottom: 5px;
+                        font-size: 12px;
+                        line-height: 12px;
+                        -webkit-border-radius: 2px;
+                        -moz-border-radius: 2px;
+                        border-radius: 2px;
+                        color:#e2b46e;
+                        background-color:#f8e7c4;
+                        position: relative;
+                        top: 1px;
+                    }
+                    .staff{
+                        display: inline-block;
+                        white-space:nowrap;
+                        vertical-align: middle;
+                        padding: 3px 4px;
+                        margin-right: 5px;
+                        margin-bottom: 5px;
+                        font-size: 12px;
+                        line-height: 12px;
+                        -webkit-border-radius: 2px;
+                        -moz-border-radius: 2px;
+                        border-radius: 2px;
+                        color:#4CD263;
+                        background-color:#cafcc7;
+                        position: relative;
+                        top: 1px;
+                    }
+                    .time{
+                        width:100%;
+                        color: var(--van-gray-6);
+                        font-size: 12px;
+                        margin-top: 3px;
+                    }
+                }
+                
+            }
+            .right-layout{
+                :deep(.van-button){
+                    height: 36px;
+                }
+            }
+        }
+    }
+
+
+    /* 红包 */
+    .receiveRedEnvelope{
+        margin-top: 8px;
+        background: #fff;
+        border-radius: var(--van-border-radius-lg);
+        .redEnvelope{
+            margin-bottom:10px;
+            padding:20px 15px 20px;
+            margin:0 auto; 
+            width:150px;
+            .box {
+                border-radius: 16px;
+                background-color: #ff483a;
+                overflow: hidden;
+                position: relative;
+                color: #FFFFFF;
+                .head {
+                    border-bottom-right-radius: 100%;
+                    border-bottom-left-radius: 100%;
+                    width: 150%;
+                    border-bottom: 2px solid #e03d19;
+                    background-image: linear-gradient(-180deg, #ff583f 0%, #ff483a 100%);
+                    position: relative;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    min-height: 16px;
+                }
+                .body {
+                    padding-top: 20px;
+                    margin:0 auto;
+                    .content{
+                        margin-bottom:15px;
+	                    color:#fed68e;font-size:16px;position: relative;text-align: center;
+                        .avatarBox{
+                            border-radius:100%;
+	                        margin-top: 40px;text-align: center;
+                            img{
+                                border-radius:100%;
+	                            width: 32px;
+                            }
+                        }
+                    }
+                }
+                .btn{
+                    border:none;
+                    position: absolute;
+                    top:15px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background-color: #fed848;
+                    width: 46px;
+                    height: 46px;
+                    line-height: 46px;
+                    text-align: center;
+                    font-size: 30px;
+                    color:#dc972e;
+                    border-radius: 100%;
+                    cursor: pointer;
+                    transition: transform 0.3s;
+                    transform-origin:0 50%;
+                    -moz-user-select:none; /*火狐*/
+                    -webkit-user-select:none; /*webkit浏览器*/
+                    user-select:none;
+                    &:hover {
+                        transform: scale(1.2) translateX(-50%) ;/* perspective(1px) translate3d(0,0,0) */
+                    }
+                }
+                .open-btn{
+                    border:none;
+                    position: absolute;
+                    top:13px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background-color: #fed848;
+                    width: 50px;
+                    height: 50px;
+                    line-height: 50px;
+                    text-align: center;
+                    font-size: 18px;
+                    color:#dc972e;
+                    border-radius: 100%;
+                    cursor: pointer;
+                    transition: transform 0.3s;
+                    transform-origin:0 50%;
+                }
+            }
+        }
+    
+        .receiveRedEnvelopeUser{
+            margin-left: 25px;padding-bottom: 15px;margin-right: 25px;position: relative;
+            .box{
+                text-align: center;
+                margin-left: 8px;
+            }
+            .avatar {
+                width: 32px;
+                height: 32px;
+                line-height: 32px;
+                margin-bottom:8px;
+                display: inline-block;
+                margin-right: 8px;
+                background: #fff no-repeat center/cover;
+                position: relative;
+                text-align: center;
+                color: #fff;
+                vertical-align: bottom;
+
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+                border-radius: 50%;
+                box-shadow: 0 0 0 1px rgba(0,0,0,.1);
+            }
+            .more {
+                width:20px; height:14px; position: absolute;left: 0; right: 0; bottom: 5px;
+                margin: auto;
+                .icon {
+                    font-size: 15px;
+                    color: var(--van-gray-5);
+                    &:hover{
+                        color: #1890ff;
+                    }
+                }
+            }
+        }
+        .noRedEnvelope{
+            margin-bottom:10px;
+            padding:20px 15px 20px;
+            margin:0 auto;
+            width:220px;
+            .box {
+                border-radius: 16px;
+                background-color: #ff483a;
+                overflow: hidden;
+                position: relative;
+                color: #FFFFFF;
+                .content{
+                    color:#fed68e;font-size:16px;height: 60px;line-height:60px; position: relative;text-align: center;
+                }
+            }
+        }
+        
+    }
+    
+
+
+
+
+
+
+
+    .topicDetail{
+        margin-top: 8px;
+        background: #fff;
+        border-radius: var(--van-border-radius-lg);
+        .head{
+            
+            .titleBox{
+                font-size:0;/*父级元素设置font-size:0; 解决 display:inline-block两个元素之间的默认空格 */
+                line-height:0;
+                .title {
+                    color: var(--van-gray-8);
+                    font-weight: 400;
+                    font-size: 20px;
+                    line-height: 30px;
+                }
+                .essence{
+                    display: inline-block;
+                    padding: 2px 3px;
+                    margin-left:5px;
+                    font-size: initial;/*解决安卓浏览器文本无法垂直居中*/
+                    line-height: 14px;
+                    -webkit-border-radius: 2px;
+                    -moz-border-radius: 2px;
+                    border-radius: 2px;
+                    color: #fff;
+                    background-color: #ff7875;
+                    position: relative;
+                    top: -2px;
+                    span{
+                        font-size: 14px;
+                    }
+                }
+                .top{
+                    display: inline-block;
+                    padding: 2px 3px;
+                    margin-left:5px;
+                    font-size: initial;/*解决安卓浏览器文本无法垂直居中*/
+                    line-height: 14px;
+                    -webkit-border-radius: 2px;
+                    -moz-border-radius: 2px;
+                    border-radius: 2px;
+                    color: #fff;
+                    background-color: #69c0ff;
+                    position: relative;
+                    top: -2px;
+                    span{
+                        font-size: 14px;
+                    }
+                }
+            }
+            .info{
+                margin-top: 15px;
+                padding-bottom: 10px;
+                display: flex;
+                .left-layout{
+                    flex: 1;
+                    .tagName{
+                        background-color: var(--van-gray-1);
+                        font-size: 14px;
+                        line-height: 14px;
+                        display: inline-block;
+                        padding: 6px 6px 6px 6px;
+                        -moz-border-radius: 2px;
+                        -webkit-border-radius: 2px;
+                        border-radius: 2px;
+                        text-decoration: none;
+                        color: var(--van-gray-6);
+                        
+                    }
+                    margin-right: 10px;
+                }
+                .right-layout{
+                    color: var(--van-gray-6);
+                    font-size: 14px;
+                    margin-top: 4px;
+                    .statistics{
+                        .icon{
+                            position: relative;
+                            top: 2px;
+                        }
+                        .commentTotal{
+                            margin-left: 2px;
+                            margin-right: 12px;
+                        }
+                        .viewTotal{
+                            margin-left: 2px;
+                        }
+                        .more{
+                            margin-left: 12px;
+                            position: relative;
+                            top: 1px;
+                        }
+                    }
+                    
+                }
+            }
+        }
+        :deep(.topicContent){
+            margin-left: 12px;
+            margin-right: 12px;
+            padding-bottom: 20px;
+            color:var(--van-gray-8);
+            font-size:16px; 
+            line-height:1.75; 
+            word-wrap:break-word;
+            min-height: 100px;
+            .cancelAccount{
+                display: inline-block;
+                vertical-align: middle;
+                padding: 6px 6px;
+                font-size: 14px;
+                line-height: 14px;
+                -webkit-border-radius: 2px;
+                -moz-border-radius: 2px;
+                border-radius: 2px;
+                color: var(--van-gray-5);
+                background-color: var(--van-gray-1);
+                margin-bottom: 6px;
+            }
+            .lastUpdateTime{
+                text-align: center;padding-top: 20px; padding-bottom: 20px;color: var(--van-gray-6);font-size: 15px;
+            }
+            a{
+                color: var(--van-blue);
+            }
+            p{
+                font-size:16px;
+                word-wrap:break-word
+            }
+            img{
+                max-width:100%;height:auto;border:none;background:none;margin:0;padding:0; 
+                cursor: -webkit-zoom-in;
+                cursor: zoom-in;
+                vertical-align: sub;
+            }
+
+            /** 解决Chrome内核浏览器DPI缩放比例高于100%时部分边框变粗问题   本方案需删除table样式 border="1" bordercolor="#000000" */
+            table {
+                border-collapse: separate; 
+                border-spacing: 0; 
+                border-top: 1px solid var(--van-gray-3);
+                border-left: 1px solid var(--van-gray-3);
+                th {
+                    font-weight: 600
+                }
+                th, td {
+                    border-right: 1px solid var(--van-gray-3);
+                    border-bottom: 1px solid var(--van-gray-3);
+                    padding: 6px 13px
+                }
+                tr {
+                    background-color: #fff;
+                    border-top: 1px solid var(--van-gray-3);
+                    &:nth-child(2n) {
+                        background-color: var(--van-gray-1);
+                    }
+                }
+            }
+            ol{
+                li{ 
+                    list-style-type:decimal;
+                    list-style-position:inside;
+                }
+            }
+            ul{
+                li{ 
+                    margin-left:20px;
+                    list-style-type:disc;
+                }
+            }
+            iframe{
+                width:100%; height: 300px;padding:10px 0px; 
+            }
+            player{
+                width: 100%;
+                height: 576px;
+                display: block;
+                margin-top: 10px;
+                margin-bottom: 10px;
+                //关闭页面全屏按钮
+                .dplayer-full-in-icon{
+                    display: none !important;
+                }
+            }
+            .dplayer-process {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 10;
+                .box{
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    .prompt{
+                        width: 250px;
+                        height: 80px;
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        right: 0;
+                        bottom: 0;
+                        margin: 100px auto;
+                        padding :0px 30px;
+                        border-radius :3px;
+                        color: #fff;
+                        line-height: 80px;
+                        font-size: 20px;
+                        background-color:rgb(0,0,0);
+                        opacity:0.7;
+                        filter:alpha(opacity=70);
+                        text-align: center;
+                    }
+                }
+            }
+            
+            hide{
+                display:block;
+                background: var(--van-gray-1);
+                min-height:80px;
+                margin-top: 17px;
+                margin-bottom: 15px;
+                border: 3px dashed var(--van-gray-3);
+                border-radius: 5px;
+                .hide-box{
+                    margin: 20px;position: relative;text-align: center;
+                }
+                .background-image{
+                    margin: auto;
+                    color: var(--van-gray-4);
+                }
+                .background-prompt{
+                    margin-top: 5px; color: var(--van-gray-5);font-size: 16px;
+                }
+                .highlight{
+                    font-weight:bold;
+                }
+                .input-box{
+                    pointer-events: none;
+                    margin: auto; 
+                    margin-top: 10px;
+                    margin-bottom:25px; 
+                    border:var(--van-gray-7) solid 2px;
+                    width:226px; 
+                    height:26px; 
+                    // overflow:hidden; 
+                    border-radius: 2px;
+                    position: relative;
+                    &:hover{
+                        border:var(--van-gray-8) solid 2px;
+                        .button{
+                            border:transparent solid 0px; 
+                            background:var(--van-gray-8);
+                        }
+                    }
+                    .text{ 
+                        pointer-events:auto;
+                        width:145px; 
+                        height:26px; 
+                        line-height:26px; 
+                        border:0; 
+                        float:left; 
+                        font-size:14px; 
+                        color:var(--van-gray-8);
+                        text-indent: 6px; 
+                        vertical-align:middle;
+                        outline:none; 
+                        background: var(--van-gray-1);
+                    }
+                    .button{
+                        position: absolute;
+                        top: -1px;
+                        right: -2px;
+                        pointer-events:auto; 
+                        display: inline-block;
+                        white-space:nowrap;
+                        width:80px;
+                        height:28px; 
+                        vertical-align: middle;
+                        font-size: 15px;
+                        line-height: 28px;
+                        -webkit-border-radius: 0px 2px 2px 0px;
+                        -moz-border-radius: 0px 2px 2px 0px;
+                        border-radius: 0px 2px 2px 0px;
+                        color:#fff;
+                        background-color:var(--van-gray-7);
+                        cursor:pointer;
+                        user-select:none;
+                        &:hover{
+                            background:var(--van-gray-8);
+                        }
+                    }
+                }
+                .submit-box{
+                    margin-top: 10px;
+                    margin-bottom:5px; 
+                    display: inline-block;
+                    white-space:nowrap;
+                    width:80px;
+                    height:30px; 
+                    vertical-align: middle;
+                    font-size: 15px;
+                    line-height: 30px;
+                    -webkit-border-radius: 2px;
+                    -moz-border-radius: 2px;
+                    border-radius: 2px;
+                    color:#fff;
+                    background-color:var(--van-gray-7);
+                    cursor:pointer;
+                    user-select:none;
+                    &:hover{
+                        background:var(--van-gray-8);
+                    }
+                }
+                .input-box{
+                    .text::-webkit-input-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                    .text:-ms-input-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                    .text:-moz-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                    .text::-moz-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                }
+            }
+            //自动换行
+            pre{
+                white-space:pre-wrap;
+            }
+        }
+            
+        .operating {
+            display:inline-block;
+            text-align: center;
+            width: 100%;
+            .bottomInfo{
+                margin-top: 12px;
+                margin-bottom: 12px;
+                .favorites{
+                    height: 38px;
+                    border-radius: var(--van-button-round-border-radius);//var(--van-border-radius-lg);
+                    border: var(--van-button-border-width) solid var(--van-gray-4);
+                    color: var(--van-gray-6);
+                }
+                .like{
+                    height: 38px;
+                    border-radius: var(--van-button-round-border-radius);//var(--van-border-radius-lg);
+                    border: var(--van-button-border-width) solid var(--van-gray-4);
+                    color: var(--van-gray-6);
+                    margin-left: 10px;
+                }
+                .icon{
+                    margin-right: 4px;
+                    position: relative;
+                    top: 2px;
+                }
+            }
+        }
+        
+
+
+
+
+
+
+    }
+    .allow-comment-wrap{
+        margin-top: 8px;
+        background: #fff;
+        padding: 12px;
+        border-radius: var(--van-border-radius-lg);
+        .no-comment-button{
+            text-align: center;
+            background: var(--van-gray-1);
+            color: var(--van-gray-6);
+            line-height: 42px;
+            border-radius: var(--van-border-radius-lg);
+        }
+
+        .comment-button{
+            .login-button{
+                text-align: center;
+                background: var(--van-gray-1);
+                color: var(--van-gray-6);
+                line-height: 42px;
+                border-radius: var(--van-border-radius-lg);
+                span{
+                    color: var(--van-blue);
+                    margin-right: 3px;
+                }
+            }
+        }
+    }
+    .no-comment-wrap{
+        margin-top: 8px;
+        background: #fff;
+        padding: 12px;
+        border-radius: var(--van-border-radius-lg);
+        .no-comment{
+            text-align: center;
+            background: var(--van-gray-1);
+            color: var(--van-gray-6);
+            line-height: 42px;
+            border-radius: var(--van-border-radius-lg);
+        }
+    }
+    .commentList{
+        margin-top: 8px;
+        background: #fff;
+        border-radius: var(--van-border-radius-lg);
+        .item{
+            margin-left: 12px;
+            margin-right: 12px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+
+            .top-container{
+                display: flex;
+                .left-layout{
+                    .avatarImg{
+                        img {
+                            width: 40px;
+                            height: 40px;
+                            border-radius:40px;
+                            vertical-align: middle;
+                        }
+                    }
+                }
+                .middle-layout{
+                    flex: 1;
+                    margin-left: 10px;
+                    margin-right: 10px;
+                    .userInfo{
+                        display: flex; 
+                        align-items: center;
+                        flex-wrap: wrap;
+                        .cancelNickname{
+                            font-weight:normal;
+                            margin-right: 3px;
+                            color: transparent;
+                            text-shadow: 0 0 5px rgba(0,0,0,0.4);
+                            zoom: 1;
+                            user-select:none;
+                        }
+                        .account{
+                            color: var(--van-gray-7);
+                            margin-right: 5px;
+                            position: relative;
+                            top: -2px;
+                        }  
+                        .userRoleName{
+                            display: inline-block;
+                            white-space:nowrap;
+                            vertical-align: middle;
+                            padding: 3px 4px;
+                            margin-right: 5px;
+                            margin-bottom: 5px;
+                            font-size: 12px;
+                            line-height: 12px;
+                            -webkit-border-radius: 2px;
+                            -moz-border-radius: 2px;
+                            border-radius: 2px;
+                            color:#e2b46e;
+                            background-color:#f8e7c4;
+                            position: relative;
+                            top: 1px;
+                        }
+                        .staff{
+                            display: inline-block;
+                            white-space:nowrap;
+                            vertical-align: middle;
+                            padding: 3px 4px;
+                            margin-right: 5px;
+                            margin-bottom: 5px;
+                            font-size: 12px;
+                            line-height: 12px;
+                            -webkit-border-radius: 2px;
+                            -moz-border-radius: 2px;
+                            border-radius: 2px;
+                            color:#4CD263;
+                            background-color:#cafcc7;
+                            position: relative;
+                            top: 1px;
+                        }
+                        .time{
+                            width:100%;
+                            color: var(--van-gray-6);
+                            font-size: 12px;
+                            margin-top: 3px;
+                        }
+                    }
+                    
+                }
+                .right-layout{
+                    display: flex;
+                    position: relative;
+                    top: -2px;
+                    .floor{
+                        font-size: 12px;
+                        color: var(--van-gray-6);
+                    }
+                    .more{
+                        margin-left: 10px;
+                        color: var(--van-gray-6);
+                        position: relative;
+                        top: 1px;
+                    }
+                }
+            }
+            .bottom-container{
+                :deep(.quote){
+                    padding:5px 8px;
+                    border-bottom:none;
+                    text-align: left;
+                    margin-top: 20px;
+                    .cancelAccount{
+                        display: inline-block;
+                        vertical-align: middle;
+                        padding: 6px 6px;
+                        font-size: 14px;
+                        line-height: 14px;
+                        -webkit-border-radius: 2px;
+                        -moz-border-radius: 2px;
+                        border-radius: 2px;
+                        color: var(--van-gray-5);
+                        background-color: var(--van-gray-1);
+                    }
+                    .cancelNickname{
+                        font-weight:normal;
+                        color: transparent;
+                        text-shadow: 0 0 5px rgba(0,0,0,0.4);
+                        zoom: 1;
+                        user-select:none;
+                    }
+                    .quoteComment{
+                        background:var(--van-gray-1);
+                        padding:5px 8px 8px 8px;
+                        border:1px solid var(--van-gray-3);
+                        line-height:140%;
+                        margin-bottom:6px;
+                        line-height: 28px;
+                        border-radius: 3px;
+                        .userName{
+                            font-size:14px;
+                            height: 30px;
+                            position: relative;
+                            margin-left: 26px;
+                            color:var(--van-gray-6);
+                            .avatarBox{
+                                position:absolute;
+                                display:inline-block;
+                                border-radius:100%;
+                                left: -26px;
+                                top:-4px;
+                                img{
+                                    border-radius:100%;
+                                    width: 22px;
+                                }
+                            }
+                        }
+                        .quoteContent{
+                            margin-top: 8px;
+                            margin-bottom: 2px;
+                        }
+                    }
+                }
+                :deep(.commentContent){
+                    padding-bottom: 10px;
+                    word-wrap:break-word;
+                    color: var(--van-gray-8);
+                    font-size:15px; 
+                    line-height:1.75; 
+                    margin-top: 20px;
+                    
+                    .cancelAccount{
+                        display: inline-block;
+                        vertical-align: middle;
+                        padding: 6px 6px;
+                        font-size: 14px;
+                        line-height: 14px;
+                        -webkit-border-radius: 2px;
+                        -moz-border-radius: 2px;
+                        border-radius: 2px;
+                        color:  var(--van-gray-5);
+                        background-color:  var(--van-gray-1);
+                    }
+                    img {
+                        max-width:100%;
+                        height:auto;
+                        border:none;
+                        background:none;
+                        margin:0;
+                        padding:0;
+                        vertical-align: sub;
+                    }
+                    pre{
+                        white-space:pre-wrap;
+                        code{/*连续字母数字换行*/
+                            word-break: break-all;
+                        }
+                    }
+                    table {
+                        width: 100%;
+                        th {
+                            font-weight: 600
+                        }
+                        td,th {
+                            border: 1px solid  var(--van-gray-3);
+                            padding: 6px 13px
+                        }
+                        tr {
+                            background-color: #fff;
+                            border-top: 1px solid  var(--van-gray-3);
+                            &:nth-child(2n) {
+                                background-color:  var(--van-gray-1);
+                            }
+                        }
+                    }
+                    ol{
+                        li{ 
+                            list-style-type:decimal;
+                            list-style-position:inside;
+                        }
+                    }
+                    ul{
+                        li{ 
+                            margin-left:20px;
+                            list-style-type:disc;
+                        }
+                    }
+                }
+                .replyList{
+                    margin-top: 15px;
+                    margin-left: 50px;
+                    position: relative;
+                    &:before {
+                        position: absolute;
+                        width: 14px;
+                        height: 14px;
+                        box-sizing: border-box;
+                        content: " ";
+                        pointer-events: none;
+                        border-top: 1px solid var(--van-gray-3);
+                        border-left: 1px solid var(--van-gray-3);
+                        transform: rotate(45deg) scale(.5) ;
+                        background-color: #fff;
+                        top: -7px;
+                        left: 30px;
+                        z-index: 1;
+                    }
+                    .reply-container{
+                        padding-top: 12px;
+                        padding-bottom: 12px;
+                        .top-container{
+                            display: flex;
+                            .left-layout{
+                                .avatarImg{
+                                    img {
+                                        width: 32px;
+                                        height: 32px;
+                                        border-radius:32px;
+                                        vertical-align: middle;
+                                    }
+                                }
+                            }
+                            .middle-layout{
+                                flex: 1;
+                                margin-left: 10px;
+                                margin-right: 10px;
+                                .userInfo{
+                                    display: flex; 
+                                    align-items: center;
+                                    flex-wrap: wrap;
+                                    .cancelAccount{
+                                        display: inline-block;
+                                        vertical-align: middle;
+                                        padding: 4px 4px;
+                                        font-size: 12px;
+                                        line-height: 12px;
+                                        -webkit-border-radius: 2px;
+                                        -moz-border-radius: 2px;
+                                        border-radius: 2px;
+                                        color: var(--van-gray-5);
+                                        background-color: var(--van-gray-1);
+                                        position: relative;
+                                        left: -5px;
+                                        margin-top: 2px;
+                                        margin-bottom: 2px;
+                                    }
+                                    .account{
+                                        color: var(--van-gray-7);
+                                        margin-right: 5px;
+                                        position: relative;
+                                        top: -3px;
+                                    }  
+                                    .userRoleName{
+                                        display: inline-block;
+                                        white-space:nowrap;
+                                        vertical-align: middle;
+                                        padding: 2px 4px;
+                                        margin-right: 5px;
+                                        margin-bottom: 5px;
+                                        font-size: 12px;
+                                        line-height: 12px;
+                                        -webkit-border-radius: 2px;
+                                        -moz-border-radius: 2px;
+                                        border-radius: 2px;
+                                        color:#e2b46e;
+                                        background-color:#f8e7c4;
+                                        position: relative;
+                                        top: -1px;
+                                    }
+                                    .staff{
+                                        display: inline-block;
+                                        white-space:nowrap;
+                                        vertical-align: middle;
+                                        padding: 2px 4px;
+                                        margin-right: 5px;
+                                        margin-bottom: 5px;
+                                        font-size: 12px;
+                                        line-height: 12px;
+                                        -webkit-border-radius: 2px;
+                                        -moz-border-radius: 2px;
+                                        border-radius: 2px;
+                                        color:#4CD263;
+                                        background-color:#cafcc7;
+                                        position: relative;
+                                        top: -1px;
+                                    }
+                                    .time{
+                                        width:100%;
+                                        color: var(--van-gray-6);
+                                        font-size: 12px;
+                                        position: relative;
+                                        top: -2px;
+                                    }
+                                }
+                                
+                            }
+                            .right-layout{
+                                display: flex;
+                                .more{
+                                    color: var(--van-gray-6);
+                                    position: relative;
+                                    top: 1px;
+                                }
+                            }
+                        }
+                        .bottom-container{
+                           
+                            .replyContent{
+                                font-size: 15px;
+                                line-height:26px;
+                                color:var(--van-gray-8);
+                                margin-top: 8px;
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                word-break:break-all;
+                                .cancelAccount{
+                                    display: inline-block;
+                                    vertical-align: middle;
+                                    padding: 6px 6px;
+                                    font-size: 14px;
+                                    line-height: 14px;
+                                    -webkit-border-radius: 2px;
+                                    -moz-border-radius: 2px;
+                                    border-radius: 2px;
+                                    color: var(--van-gray-5);
+                                    background-color:  var(--van-gray-1);
+                                }
+                            }
+                        }
+                    }
+                    .link {
+                        text-align: right;
+                        margin-bottom: 5px;
+                        span {
+                            font-size: 14px;
+                            color: var(--van-blue);
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+}
+    
+.addCommentModule{
+    overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+	height: 100%; 
+    .form-container{
+        .van-cell {
+            padding: 0px var(--van-cell-horizontal-padding) var(--van-cell-vertical-padding) var(--van-cell-horizontal-padding);
+        
+            &:after {
+                border-bottom: 1px solid transparent;
+            }
+        }
+        [class*=van-hairline]:after{
+            border-bottom: 1px solid transparent;
+        }
+        .submitButton{
+            width: 100%;
+            margin: 16px 0px;
+        }
+        
+    }
+}
+
+.quoteCommentModule{
+    overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+	height: 100%; 
+    .quoteBox{
+        background: var(--van-gray-1);
+        padding: 12px;
+        margin: 46px 16px 0px 16px;
+        font-size: 14px;
+        line-height: 28px;
+        color: var(--van-gray-6);
+        border-radius:3px;
+    }
+    .form-container{
+        .van-cell {
+            padding: 0px var(--van-cell-horizontal-padding) var(--van-cell-vertical-padding) var(--van-cell-horizontal-padding);
+        
+            &:after {
+                border-bottom: 1px solid transparent;
+            }
+        }
+        [class*=van-hairline]:after{
+            border-bottom: 1px solid transparent;
+        }
+        .submitButton{
+            width: 100%;
+            margin: 16px 0px;
+        }
+        
+    }
+}
+.editCommentModule{
+    overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+	height: 100%;
+    .form-container{
+        .van-cell {
+            padding: 0px var(--van-cell-horizontal-padding) var(--van-cell-vertical-padding) var(--van-cell-horizontal-padding);
+        
+            &:after {
+                border-bottom: 1px solid transparent;
+            }
+        }
+        [class*=van-hairline]:after{
+            border-bottom: 1px solid transparent;
+        }
+        .submitButton{
+            width: 100%;
+            margin: 16px 0px;
+        }
+        
+    }
+}
+.addReplyModule{
+    overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+	height: 100%; 
+
+    margin: 16px 0px 8px 0px;
+    .replyContent-item{
+        :deep(.van-field__control){
+            padding: 10px;
+            background-color: var(--van-gray-1);
+            overflow:hidden;//让输入框触摸可以滑动
+        }
+        
+        &:after{
+            border-bottom: 1px solid transparent;
+        }
+    }
+    .captcha-item{
+        :deep(.van-field__control){
+            background-color: var(--van-gray-1);
+        }
+        :deep(.van-field__control){
+            padding: 10px;
+            border-radius: 3px;
+        }
+        &:after{
+            border-bottom: 1px solid transparent;
+        }
+    }
+    .submitButton{
+        width: 100%;
+        margin: 16px 0px;
+    }
+}
+
+.editReplyModule{
+    overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+	height: 100%; 
+
+    margin: 16px 0px 8px 0px;
+    .replyContent-item{
+        :deep(.van-field__control){
+            padding: 10px;
+            background-color: var(--van-gray-1);
+            overflow:hidden;//让输入框触摸可以滑动
+        }
+        
+        &:after{
+            border-bottom: 1px solid transparent;
+        }
+    }
+    .captcha-item{
+        :deep(.van-field__control){
+            background-color: var(--van-gray-1);
+        }
+        :deep(.van-field__control){
+            padding: 10px;
+            border-radius: 3px;
+        }
+        &:after{
+            border-bottom: 1px solid transparent;
+        }
+    }
+    .submitButton{
+        width: 100%;
+        margin: 16px 0px;
+    }
+}
+
+/* 相关话题 */
+.likeTopicModule{
+    margin: var(--van-cell-group-inset-padding);
+	background: #fff;
+    border-radius: var(--van-border-radius-lg);
+    .likeTopic{
+        margin-bottom:10px;
+        padding:0 12px 0;
+        .title{
+            font-size:16px;
+            padding:20px 0 15px;
+            color:var(--van-gray-8);
+        }
+        .topicList {
+            font-size: 15px;
+            margin-top: 12px;
+            padding-bottom: 12px;
+            > .topic-title {
+                counter-increment: index;
+                display: flex;
+                flex-direction: row;
+                padding-top: 5px;
+                padding-bottom: 5px;
+                &::before {
+                    content: counter(index);
+                    display: flex;
+                    width: 22px;
+                    height: 22px;
+                    background-color: var(--van-gray-1);
+                    text-align: center;
+                    border-radius: 4px;
+                    flex: none;
+                    align-items: center;
+                    justify-content: center;
+                    color: var(--van-gray-5);
+                    position: relative;
+                    top: 1px;
+                }
+                .top{
+                    &::before {
+                        background-color: var(--van-blue);
+                        color: #fff;
+                    }
+                }
+                > a {
+                    display: block;
+                    word-break: break-word; font-size: 15px;
+                    flex: auto;
+                    margin-left: 8px;
+                    line-height: 26px;
+                    color: var(--van-gray-8);
+                    &:hover {
+                        color: var(--van-blue);
+                    }
+                }
+            }
+        }
+    }
+}
+
+</style>

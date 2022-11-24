@@ -1,0 +1,999 @@
+<!-- 提问题页 -->
+<template>
+    <div class="main">
+        <div class="main-container">
+            <van-nav-bar title="提问题" left-text="返回" left-arrow @click-left="onBack" @click-right="router.push({path: '/index'})">
+                <template #right>
+                    <van-icon name="wap-home-o" :size="convertViewportWidth('18px')"/>
+                </template>
+            </van-nav-bar>
+            <van-pull-refresh v-model="form.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+                <div class="addQuestionModule" v-if="store_systemUser != null && Object.keys(store_systemUser).length>0">
+                    <van-form ref="formRef" :scroll-to-error="true" class="form-container" v-if="form.allowQuestion">
+                        <van-cell-group inset>
+                            <van-field v-model.trim="form.title" label="标题" placeholder="请输入标题" maxlength="90" clearable :rules="[{ validator: validatorTitle }]" :error-message="error.title"/>
+                            
+                            <div class="van-cell cell-field">
+                                <div class="van-cell__title van-field__label cell-field-title">
+                                    <span>标签</span>
+                                </div>
+                                <div class="van-cell__value">
+                                    <span>
+                                        <div class="questionTag">
+                                            <span class="btn mr"  v-for="selectedTag in form.selectedTagList"  >{{selectedTag.name}}<span class="ml"  @click="deleteTag(selectedTag.id);">×</span></span>
+                                        
+                                            <div class="addTag">
+                                                <button type="button" class="btn"  @click="showTagUI();" >+ 添加标签(<span>{{form.selectedTagList.length}}</span>/{{form.maxQuestionTagQuantity}})</button>
+                                            </div>
+                                            
+                                        </div>
+                                    </span>
+                                    <div class="van-field__error-message">{{error.tagId}}</div>
+                                </div>
+                               
+                            </div>
+                            <van-popup v-model:show="form.popup_allTag" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" class="custom-bottom-popupModule" :style="{ height: '65%' }" round>
+                                
+                                <div ref="questionTagScroll" class="selectQuestionTagModule">
+                                    <div class="box" >
+                                        <div class="questionTagNavigation">
+                                            <van-loading color="#1989fa" v-if="form.loading" style="text-align: center"/>
+                                            <ul class="nav" v-if="form.allTagList != null && form.allTagList.length >0">
+                                                <li class="nav-item" :class="selectedTagClass(questionTag.id)" v-for="questionTag in form.allTagList" >
+                                                    <span class="nav-link" @click="selectChildTag(questionTag.id)" >{{questionTag.name}}</span>
+                                                </li>
+                                            </ul>
+                                            <!-- 二级标签 -->
+                                            <div class="tab-content">
+                                                <div class="tab-pane">
+                                                    <span :class="selectedChildTagClass(childQuestionTag.id)" @click="selectedTag(childQuestionTag)"  v-for="childQuestionTag in form.childTagList" >{{childQuestionTag.name}}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </van-popup>
+
+                            <div class="van-cell cell-field"  v-if="form.questionRewardAmountMax == null || (form.questionRewardAmountMax != null && parseFloat(form.questionRewardAmountMax) >0)">
+                                <div class="van-cell__title van-field__label cell-field-title">
+                                    <span>悬赏金额</span>
+                                </div>
+                                <div class="van-cell__value">
+                                    <span>
+                                        <van-field v-model.trim="form.amount" placeholder="输入金额" maxlength="10" class="cell-field-value" :formatter="amountFormat" clearable :error-message="error.amount"/>
+                                    </span>
+                                </div>
+                                <div class="van-cell__label cell-field-label">
+                                    <span class="help-text">
+                                        <span v-if="parseFloat(form.questionRewardAmountMin) >0">悬赏金额不能少于 {{form.questionRewardAmountMin}} 元；</span>	
+                                        <span v-if="form.questionRewardAmountMax != null && parseFloat(form.questionRewardAmountMax) >0">悬赏金额不能超过 {{form.questionRewardAmountMax}} 元；</span>	
+                                        <span>用户共有金额 {{form.maxDeposit}} 元</span>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="van-cell cell-field"  v-if="form.questionRewardPointMax == null || (form.questionRewardPointMax != null && parseInt(form.questionRewardPointMax) >0)">
+                                <div class="van-cell__title van-field__label cell-field-title">
+                                    <span>悬赏积分</span>
+                                </div>
+                                <div class="van-cell__value">
+                                    <span>
+                                        <van-field v-model.trim="form.point" placeholder="输入积分" maxlength="9" class="cell-field-value" type="digit" clearable :error-message="error.point"/>
+                                    </span>
+                                </div>
+                                <div class="van-cell__label cell-field-label">
+                                    <span class="help-text">
+                                        <span v-if="parseInt(form.questionRewardPointMin) >0">悬赏积分不能少于 {{form.questionRewardPointMin}} ；</span>	
+                                        <span v-if="form.questionRewardPointMax != null && parseInt(form.questionRewardPointMax) >0">悬赏积分不能超过 {{form.questionRewardPointMax}}；</span>	
+                                        <span>用户共有积分 {{form.maxPoint}} 元</span>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <van-field center :error-message="error.content" class="content">
+                                <template #input>
+                                    <div style="width: 100%;">
+                                        <van-sticky :z-index="1" >
+                                            <div ref="questionContentEditorToolbarRef" class="editor-toolbar" style="padding-top: 5px;margin-left: -5px;"></div>
+                                        </van-sticky>
+                                        <div ref="questionContentEditorTextRef"  class="editor-text" style="min-height: 320px;"></div>
+                                    </div>
+                                </template>
+                            </van-field>
+
+
+                            <van-field v-model="form.captchaValue" v-if="form.showCaptcha" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable :rules="[{ validator: checkCaptchaValue }]" :error-message="error.captchaValue">
+                                <template #button>
+                                    <van-image :src="form.imgUrl" @click="replaceCaptcha" class="captcha-image"/>
+                                </template>
+                                <template #extra >
+                                    <span class="captcha-replace" @click="replaceCaptcha">换一幅</span>
+                                </template>
+                            </van-field>
+                        
+                        </van-cell-group>
+                        <div class="submitButton">
+                            <van-button round block type="primary" native-type="submit" @mousedown="onSubmit" :disabled="form.allowSubmit">提交</van-button>
+                        </div>
+                    </van-form>
+
+                    <div class="resultModule" v-if="!form.allowQuestion">
+                        <div class="result">
+                            <div class="result-icon">
+                                <van-icon name="warning" class="icon-warning" size="64px"/>
+                            </div>
+                            <div class="result-title">
+                                <p>提问题功能已关闭</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="addTopicModule" v-if="store_systemUser == null || Object.keys(store_systemUser).length ==0">
+                    <van-skeleton :row="3" class="skeleton"/>
+                </div>
+            </van-pull-refresh>
+        </div>
+    </div>
+</template>
+<script setup lang="ts">
+import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref, onUnmounted, watchEffect, onActivated} from 'vue'
+    import { onBeforeRouteUpdate, useRouter } from 'vue-router'
+    import { AxiosResponse } from 'axios'
+    import {getPageBasePath, processErrorInfo} from '@/utils/tool';
+    import { QuestionTag, Tag } from '@/types';
+    import pinia from '@/store/store'
+    import {useStore} from '@/store'
+    import { storeToRefs } from 'pinia';
+    import { Notify, Toast } from 'vant'
+    import { onBack } from '@/utils/history'
+    import { convertViewportWidth } from '@/utils/px-to-viewport';
+    import { createEditor, destroyEditor } from '@/utils/editor';
+    
+  
+    const { proxy } = getCurrentInstance() as ComponentInternalInstance;
+    const store = useStore(pinia);
+    const router = useRouter();
+    const formRef = ref();
+    const questionContentEditorToolbarRef = ref();
+    const questionContentEditorTextRef = ref();
+    const {title:store_title,keywords:store_keywords,description:store_description,systemUser:store_systemUser} = storeToRefs(store)
+ 
+
+    //html页元信息
+    watchEffect(() => {
+        let titleValue = store_title.value//监听网站标题
+        if(titleValue != null && titleValue != ''){
+            document.title = '提问题 - ' + titleValue;
+        }
+    }, {
+        flush: 'post'//在组件更新后触发，第一次运行需要组件渲染完成才执行
+    })
+    
+    //Select 选择器选项
+    interface OptionsItem {
+        id: string;
+        name: string;
+    }
+    //表单
+    const form = reactive({
+        tagList:[] as Array<Tag>,//标签
+        allowQuestion:true,//是否允许提问题
+        userGradeList:[],//用户等级
+        availableTag:[],//问题编辑器允许使用标签
+        fileSystem:0,//文件存储系统
+
+        maxDeposit: '',//用户共有预存款
+        maxPoint: '',//用户共有积分
+        questionRewardPointMin: '',//问题悬赏积分下限
+        questionRewardPointMax: '',//问题悬赏积分上限
+        questionRewardAmountMin: '',//问题悬赏金额下限
+        questionRewardAmountMax: '',//问题悬赏金额上限
+        maxQuestionTagQuantity:0,//标签最多可选数量
+
+        amount: '',//悬赏金额
+        point: '',//悬赏积分
+
+        popup_allTag :false,
+        
+        
+        allTagList: [] as Array<QuestionTag>,//标签,//全部标签
+        selectedFirstTagId: '',//选中的一级标签Id
+        childTagList: [] as Array<QuestionTag>,//选中一级标签的子标签集合
+        selectedTagList: [] as Array<OptionsItem>,//选中标签对象集合 id:标签Id name:标签名称
+        isAllowLoadTagGroup:true,//是否允许加载标签组
+        loading :false,//是否正在从远程获取数据
+
+        tagId:'',//标签Id
+        title:'',//标题
+        content:'',//内容
+
+        showCaptcha:false,//是否显示验证码
+        captchaKey: '',//验证码key
+        captchaValue: '',//验证码值
+        imgUrl: '',//验证码图片
+        allowSubmit:false,//提交按钮disabled状态
+
+        addQuestionEditor :{} as any,//添加话题编辑器
+		addQuestionEditorCreateParameObject :{} as any,//添加话题编辑器的创建参数
+
+        isRefreshing:false,//是否处于下拉加载中状态
+    })
+    //错误
+    const error = reactive({
+        tagId:'',//标签Id
+        tagIdGroup:'',//标签Id
+        title:'',//标题
+        content:'',//内容
+        amount: '',//悬赏金额
+        point: '',//悬赏积分
+        captchaValue:'',//验证码
+    })
+
+    //下拉刷新时触发
+    const onRefresh = () => {
+        form.isRefreshing = false;
+
+        //重置
+        form.tagList.length = 0;//标签
+        form.allowQuestion = true;//是否允许提问题
+        form.userGradeList.length = 0;//用户等级
+        form.availableTag.length = 0;//问题编辑器允许使用标签
+        form.fileSystem = 0;//文件存储系统
+
+        form.maxDeposit =  '';//用户共有预存款
+        form.maxPoint =  '';//用户共有积分
+        form.questionRewardPointMin =  '';//问题悬赏积分下限
+        form.questionRewardPointMax =  '';//问题悬赏积分上限
+        form.questionRewardAmountMin =  '';//问题悬赏金额下限
+        form.questionRewardAmountMax =  '';//问题悬赏金额上限
+        form.maxQuestionTagQuantity = 0;//标签最多可选数量
+
+        form.amount = '';//悬赏金额
+        form.point = '';//悬赏积分
+
+        form.popup_allTag = false;
+        
+        
+        form.allTagList.length = 0;//标签,//全部标签
+        form.selectedFirstTagId =  '';//选中的一级标签Id
+        form.childTagList.length = 0;//选中一级标签的子标签集合
+        form.selectedTagList.length = 0;//选中标签对象集合 id:标签Id name:标签名称
+        form.isAllowLoadTagGroup = true;//是否允许加载标签组
+        form.loading = false;//是否正在从远程获取数据
+
+        form.tagId = '';//标签Id
+        form.title = '';//标题
+        form.content = '';//内容
+
+        form.showCaptcha = false;//是否显示验证码
+        form.captchaKey =  '';//验证码key
+        form.captchaValue =  '';//验证码值
+        form.imgUrl =  '';//验证码图片
+        form.allowSubmit = false;//提交按钮disabled状态
+
+
+        if (Object.keys(form.addQuestionEditor).length != 0) {//不等于空
+            destroyEditor(form.addQuestionEditor);
+            form.addQuestionEditor = {};
+        }
+		form.addQuestionEditorCreateParameObject = {} as any;//添加话题编辑器的创建参数
+        
+        init();
+    };
+
+    //查询提问题页
+    const queryAddQuestion = () => {
+        //清空error的属性值
+        Object.keys(error).map(key => {
+            Object.assign(error, {[key] : ''});
+        })
+
+        proxy?.$axios({
+            url: '/user/queryAddQuestion',
+            method: 'get',
+            params:  {},
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+
+                form.allowQuestion = data.allowQuestion;//是否允许提问题
+
+                if(data.allowQuestion){
+                    if(data.maxDeposit){
+                        form.maxDeposit = data.maxDeposit;
+                    }
+                    if(data.maxPoint){
+                        form.maxPoint = data.maxPoint;
+                    }
+                    form.questionRewardPointMin = data.questionRewardPointMin;
+                    form.questionRewardPointMax = data.questionRewardPointMax;
+                    form.questionRewardAmountMin = data.questionRewardAmountMin;
+                    form.questionRewardAmountMax = data.questionRewardAmountMax;
+                    form.maxQuestionTagQuantity = data.maxQuestionTagQuantity;
+                    
+
+
+                    if(data.userGradeList != null && data.userGradeList != ''){
+                        form.userGradeList = JSON.parse(data.userGradeList);//JSON转为对象
+                    }
+                    if(data.availableTag != null && data.availableTag != ''){
+                        form.availableTag = JSON.parse(data.availableTag);//JSON转为对象
+                    }
+                    
+                    form.fileSystem = data.fileSystem;//文件存储系统
+
+                
+
+                    if (data.captchaKey != undefined && data.captchaKey != '') {
+                        form.showCaptcha = true;
+                        form.captchaKey = data.captchaKey;
+                        replaceCaptcha();//刷新验证码
+                    }
+
+                    if (Object.keys(form.addQuestionEditorCreateParameObject).length === 0) {//等于空
+                        let uploadPath = "user/control/question/upload?method=upload";
+
+                        //编辑器图标
+                        let editorIconList = new Array();
+                        
+
+                        for(let i=0; i<form.availableTag.length; i++){
+							let _availableTag = form.availableTag[i];
+							if(_availableTag == "code"){//代码
+								editorIconList.push("code");
+							}else if(_availableTag == "forecolor"){//文字颜色
+							//	editorIconList.push("foreColor");
+							}else if(_availableTag == "hilitecolor"){//文字背景
+							//	editorIconList.push("backColor");
+							}else if(_availableTag == "bold"){//粗体
+								editorIconList.push("bold");
+							}else if(_availableTag == "italic"){//斜体
+								editorIconList.push("italic");
+							}else if(_availableTag == "underline"){//下划线
+								editorIconList.push("underline");
+							}else if(_availableTag == "link"){//插入链接
+								editorIconList.push("link");
+							}else if(_availableTag == "emoticons"){//插入表情
+								editorIconList.push("emoticon");
+							}else if(_availableTag == "image"){//图片
+								editorIconList.push("image");
+							}else if(_availableTag == "media"){//视频
+								editorIconList.push("video");
+							}else if(_availableTag == "embedVideo"){//嵌入视频
+								editorIconList.push("embedVideo");
+							}else if(_availableTag == "uploadVideo"){//上传视频
+								editorIconList.push("uploadVideo");
+							}else if(_availableTag == "insertfile"){//文件
+								editorIconList.push("file");
+							}
+						}
+
+                        //创建富文本编辑器
+                        form.addQuestionEditor = createEditor(questionContentEditorToolbarRef.value,questionContentEditorTextRef.value,editorIconList, getPageBasePath()+'common/default/', uploadPath, form.userGradeList,form.fileSystem);
+                        if (Object.keys(form.addQuestionEditor).length > 0) {
+                            form.addQuestionEditorCreateParameObject = {
+                                toolbarRef:questionContentEditorToolbarRef.value,
+                                textRef:questionContentEditorTextRef.value,
+                                editorIconList:editorIconList,
+                                uploadPath:uploadPath,
+                                userGradeList:form.userGradeList
+                            }
+                        }
+                    }
+                    
+                }
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+
+    }
+
+
+    //显示标签界面
+    const showTagUI = () => {
+        form.popup_allTag = true;
+        queryQuestionTagList();
+    }
+
+
+    //查询所有标签
+    const queryQuestionTagList = () => {
+        if(!form.isAllowLoadTagGroup){
+	        return;
+	    }
+        form.loading = true;
+       
+        proxy?.$axios({
+            url: '/queryAllQuestionTag',
+            method: 'get',
+            params:  {},
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            return response?.data
+        })
+        .then((data: Array<QuestionTag>) => {
+            if(data != null && data.length >0){
+                form.allTagList = data;
+                for(let i=0; i<data.length; i++){
+                    let questionTag = data[i];
+
+                    //第一次选中第一个标签
+                    if(form.selectedFirstTagId == ''){
+                        form.childTagList = questionTag.childTag;
+                        form.selectedFirstTagId = questionTag.id;
+                        break;
+                    }else{
+                        if(form.selectedFirstTagId == questionTag.id){
+                            form.childTagList = questionTag.childTag;
+                            break;
+                        }
+                    }
+                }
+            }
+            form.isAllowLoadTagGroup = false;
+            form.loading = false;
+
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    //选择子标签
+    const selectChildTag = (questionTagId:string) => {
+        form.selectedFirstTagId = questionTagId;
+			
+        if(form.allTagList != null && form.allTagList.length >0){
+            for (let i= 0; i < form.allTagList.length; i++) {
+                let questionTag = form.allTagList[i];
+                
+                if(questionTagId == questionTag.id){
+                    form.childTagList = questionTag.childTag;
+                    
+                    //如果只有一个节点，则允许选择本标签
+                    if(questionTag.childNodeNumber == 0){
+                        selectedTag(questionTag);
+                    }
+
+                    break;
+                }
+                
+            }
+            
+        }
+    }
+		
+    //选中标签
+    const selectedTag = (childQuestionTag:QuestionTag) => {
+        //判断是否重复选择,如果重复则取消选择
+        if(form.selectedTagList != null && form.selectedTagList.length >0){
+            for(let i=0; i<form.selectedTagList.length; i++){
+                let selectedTag = form.selectedTagList[i];
+                if(selectedTag.id == childQuestionTag.id){
+                    //删除标签
+                    deleteTag(selectedTag.id);
+                    return;
+                }
+            }
+            
+        }
+        
+        //如果超过最大允许选择数量
+        if(form.selectedTagList.length >= form.maxQuestionTagQuantity){
+            Toast.fail('已超过允许选择的最大标签数量');
+            return;
+        }
+
+        let o = new Object() as any;
+        o.id = childQuestionTag.id;
+        o.name = childQuestionTag.name;
+
+        form.selectedTagList.push(o);
+    }
+    //删除标签
+    const deleteTag = (questionTagId:string) => {
+        if(form.selectedTagList != null && form.selectedTagList.length >0){
+            for(let i=0; i<form.selectedTagList.length; i++){
+                let selectedTag = form.selectedTagList[i];
+                if(selectedTag.id == questionTagId){
+                    form.selectedTagList.splice(i, 1);
+                    return;
+                }
+            }
+            
+        }
+    }
+    //选中一级标签样式
+    const selectedTagClass = (questionTagId:string) => {
+        let className = "nav-item";
+        if(form.selectedFirstTagId == questionTagId){
+            className += " active";
+            
+        }
+        if(form.selectedTagList != null && form.selectedTagList.length >0){
+            for(let i=0; i<form.selectedTagList.length; i++){
+                let selectedTag = form.selectedTagList[i];
+                if(selectedTag.id == questionTagId){
+                    className += " selected";
+                }
+            }
+            
+        }
+        return className;
+    }
+    //选中二级标签样式
+    const selectedChildTagClass = (questionTagId:string) => {
+        if(form.selectedTagList != null && form.selectedTagList.length >0){
+            for(let i=0; i<form.selectedTagList.length; i++){
+                let selectedTag = form.selectedTagList[i];
+                if(selectedTag.id == questionTagId){
+                    return "child-tag selected";
+                }
+            }
+            
+        }
+        return "child-tag";
+    }
+
+    //金额格式化
+    const amountFormat = (value:string):string => {
+       return value = clearNoNum(value);
+    }
+
+    //控制只能输入小数点后2位
+    const clearNoNum = (val:string) => {
+        val = val.replace(/[^\d.]/g, "");  //清除“数字”和“.”以外的字符   
+        val = val.replace(/\.{2,}/g, "."); //只保留第一个. 清除多余的   
+        val = val.replace(".", "$#$").replace(/\./g, "").replace("$#$", ".");
+        val = val.replace(/^(\-)*(\d+)\.(\d\d).*$/, '$1$2.$3');//只能输入两个小数   
+        if (val.indexOf(".") < 0 && val != "") {//以上已经过滤，此处控制的是如果没有小数点，首位不能为类似于 01、02的金额  
+            val = parseFloat(val).toString();
+        }
+        return val;
+    }
+
+    //校验标题
+    const validatorTitle = (val:any):boolean => {
+        if(val == ''){
+            error.title = "标题不能为空"
+            return false;
+        }
+        error.title = "";
+        return true;
+    }
+
+
+    //刷新验证码
+    const replaceCaptcha = () => {
+        form.imgUrl = store.apiUrl+"captcha/" + form.captchaKey + ".jpg?" + Math.random();
+    }
+    //校验验证码
+    const checkCaptchaValue = (val:any):Promise<boolean | string> => {
+        return new Promise((resolve) => {
+            if(form.captchaKey != null && form.captchaKey != ''){
+                if(val != ''){
+                    if (val.length < 4) {
+                        error.captchaValue = "验证码长度为4个字符"
+                        resolve(false);
+                    } else { 
+                    
+                        proxy?.$axios({
+                            url: '/userVerification',
+                            method: 'get',
+                            params:  {
+                                captchaKey:form.captchaKey,
+                                captchaValue:form.captchaValue
+                            },
+                            showLoading: false,//是否显示加载图标
+                            loadingMask:false,// 是否显示遮罩层
+                        })
+                        .then((response: AxiosResponse) => {
+                            if(response){
+                                const result: any = response.data;
+                                if(!JSON.parse(result)){
+                                    error.captchaValue = "验证码错误"
+                                    resolve(false);
+                                }else{
+                                    error.captchaValue = "";
+                                    resolve(true);
+                                }
+                            }
+                        }).catch((error: any) =>{
+                            console.log(error);
+                        });
+                    }
+                }else{
+                    error.captchaValue = "验证码不能为空"
+                    resolve(false);
+                }
+
+            }else{
+                error.captchaValue = "";
+                resolve(true);
+            }
+        });
+    }
+
+
+
+    //提交数据
+    const onSubmit = () => {
+        form.allowSubmit = true;//提交按钮disabled状态
+
+        const p1 = new Promise<void>((resolve, reject) => {
+            // 全局表单验证
+            formRef.value.validate().then(() => {
+                resolve();
+            }).catch(() => {
+                form.allowSubmit = false;//提交按钮disabled状态
+            })
+        });
+
+        Promise.all([p1])
+            .then(() => {
+                //清空error的属性值
+                Object.keys(error).map(key => {
+                    Object.assign(error, {[key] : ''});
+                })
+            
+
+                let formData = new FormData();
+                if(form.selectedTagList != null && form.selectedTagList.length >0){
+                    for(var i=0; i<form.selectedTagList.length; i++){
+                        var selectedTag =form.selectedTagList[i];
+                        formData.append('tagId', selectedTag.id); 
+                    }
+                    
+                }
+
+                if(form.title != null && form.title != ''){
+                    formData.append('title', form.title);
+                }
+                let content =  form.addQuestionEditor.txt.html()
+                if(content != null && content !=''){
+                    formData.append('content', content);
+                }
+                
+                if(form.amount != null && form.amount != ''){
+                    formData.append('amount', form.amount);
+                }
+                if(form.point != null && form.point != ''){
+                    formData.append('point', form.point);
+                }
+
+                //验证码Key
+                formData.append('captchaKey', form.captchaKey);
+                //验证码值
+                if(form.captchaValue != ''){
+                    formData.append('captchaValue', form.captchaValue.trim());
+                }
+
+                proxy?.$axios({
+                    url: '/user/control/question/add',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+
+                        const result: any = response.data;
+                        if(JSON.parse(result.success)){//登录成功
+                             // 成功通知
+                             Notify({ 
+                                type: 'success', 
+                                message: '提交成功，3秒后自动跳转到问答页',
+                                onClose: ()=>{
+                                    router.push({
+                                        path : '/askList'
+                                    }); 
+                                } 
+                            });
+                        }else{
+                            /**
+                            //修改返回属性
+                            for (const [key, value] of Object.entries(result.error as Map<string,string>) as [string, string][]){
+                                if(key == "tagId"){
+                                    result.error.tagIdGroup = value;
+                                }
+                            } */
+
+                            //处理错误信息
+                            processErrorInfo(result.error as Map<string,string>, error,()=>{});
+                            
+
+                            
+
+                            if(result.captchaKey != null){
+                                form.showCaptcha = true;
+                                form.captchaKey = result.captchaKey;
+                                replaceCaptcha();
+                            }else{
+                                form.showCaptcha = false;
+                            }
+
+                            form.allowSubmit = false;//提交按钮disabled状态
+                        }
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    form.allowSubmit = false;//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+        
+
+    }
+
+
+
+    //导航守卫
+    onBeforeRouteUpdate((to, from, next) => {
+        if(to.name == 'addQuestion'){
+            init();
+        }
+        
+        next();
+    });
+
+    onMounted(() => {
+        init();
+    }) 
+
+
+    //卸载组件实例后调用
+    onUnmounted (()=>{
+        if (Object.keys(form.addQuestionEditor).length != 0) {//不等于空
+            destroyEditor(form.addQuestionEditor);
+            form.addQuestionEditor = {};
+        }
+    })
+    //初始化
+    const init = () => {
+        queryAddQuestion();
+       // queryTagList();
+    }
+
+    //进入keep-alive组件时触发
+    onActivated(()=>{
+        //后退时修改浏览器标题
+        let titleValue = store_title.value
+        if(titleValue != null && titleValue != ''){
+            document.title = '提问题 - ' + titleValue;
+        }
+    })
+</script>
+<style scoped lang="scss">
+
+.addQuestionModule{
+    .form-container{
+        :deep(.van-radio--horizontal){
+            margin-top: 2px;
+            margin-bottom: 8px;
+        }
+        .help-text{
+            font-size: 13px;
+            line-height: 22px;
+            color: var(--van-gray-5);
+        }
+        
+        .content{
+            &:after{
+                display: none;
+            }
+        }
+    }
+    
+    .skeleton{
+        margin: 8px;
+        padding-top: 16px;
+        padding-bottom: 16px;
+        background: #fff;
+        border-radius: var(--van-border-radius-lg);
+    }
+
+
+
+
+    .questionTag{
+        margin-top: -3px;
+        line-height: 40px;
+        .btn {
+            display: inline-block;
+            font-weight: 400;
+            text-align: center;
+            vertical-align: middle;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            
+            border: 1px solid transparent;
+            color: var(--van-gray-7);
+            background-color: var(--van-gray-3);
+            border-color: var(--van-gray-3);
+
+            padding: 3px 8px;
+            font-size: 14px;
+            line-height: 22px;
+            border-radius: 3px;
+            transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+            outline:none;
+            
+            word-wrap:break-word;
+            word-break:break-all;
+            
+            &:hover {
+                color: #5c5f65;
+                background-color: #e2e6ea;
+                border-color: #dae0e5
+            }
+        }
+        .mr{
+            margin-right: 5px!important;
+        }
+        .ml{
+            margin-left: 5px!important;
+        }
+        .addTag{
+            position: relative;
+            display: inline-block!important
+        }
+        .warning {
+            -webkit-animation: tag-warning 2s;
+            animation: tag-warning 2s
+        }
+        /**将动画与元素绑定**/
+        @-webkit-keyframes tag-warning {
+            0% {
+                background-color: #ff9e00;
+                border-color: #ff9e00
+            }
+
+            to {
+                background-color: #fff
+            }
+        }
+
+        @keyframes tag-warning {
+            0% {
+                background-color: #ff9e00;
+                border-color: #ff9e00
+            }
+
+            to {
+                background-color: #fff
+            }
+        }
+    }
+}
+
+/** 选择问题标签 **/
+.selectQuestionTagModule {
+    overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+    width: 100%;
+	height: 100%; 
+    margin: 16px 0px 8px 0px;
+    .box{
+        padding-bottom: 10px;
+        .questionTagNavigation{
+            font-size: 14px;
+            margin: 8px;
+            .nav {
+                background: var(--van-gray-1);
+                padding-left: 8px;
+                padding-top: 8px;
+                padding-right: 8px;
+                
+                .nav-item{
+                    margin-right: 8px!important;
+                    margin-bottom: 8px!important;
+                    display: inline-block;
+                    position: relative;
+                    .nav-link {
+                        border-radius: 3px;
+                        border: 1px solid var(--van-blue);
+                        color: var(--van-blue);
+                        background-color: #fff;
+                        height:30px;
+                        line-height:30px;
+                        padding-left:8px;
+                        padding-right:8px;
+
+                        display: -webkit-box;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        -webkit-line-clamp: 1;
+                        -webkit-box-orient: vertical;
+                        word-wrap:break-word;
+                        word-break:break-all;
+
+                    }
+                }
+                .selected{
+                    position: relative;
+                    transition: all 0.5s ease;
+                    &:after {
+                        content: '✔';
+                        height: 0px;
+                        width: 0px;
+                        position: absolute;
+                        bottom: -4px;
+                        right: -4px;
+                        color:#fff;
+                        line-height: 8px;
+                        border: 11px solid;
+                        border-color: transparent var(--van-blue) var(--van-blue) transparent;
+                        border-radius:3px 0px 0px 0px;
+                        /**对号大小,设置小于12px的文字*/
+                        display: inline-block;
+                        font-size: 12px;
+                        -webkit-text-size-adjust:none;
+                        -webkit-transform : scale(0.6,0.6);/*缩放指定dom，但必须是block级*/
+                        
+                    }
+                }
+                .active{
+                    .nav-link{
+                        color: var(--van-blue);
+                        background-color: #E8F7FF;
+                    }
+                    
+                }
+            }
+            .tab-content{
+                margin: 8px;
+                
+            }
+            .child-tag {
+                display: inline-block;
+                font-size: 14px;
+                padding: 2px 8px;
+                height: 28px;
+                line-height: 28px;
+                border-radius: 3px;
+                background-color: #E8F7FF;
+                color:var(--van-blue);
+                margin-right: 8px;
+                margin-bottom: 8px;
+            }
+
+            
+            .selected{
+                position: relative;
+                transition: all 0.5s ease;
+                &:after {
+                    content: '✔';
+                    height: 0px;
+                    width: 0px;
+                    position: absolute;
+                    bottom: -2px;
+                    right: -2px;
+                    color: var(--van-blue);
+                    line-height: 6px;
+                    border: 10px solid;
+                    border-color: transparent transparent transparent transparent;
+                    //对号大小,设置小于12px的文字
+                    display: inline-block;
+                    font-size: 12px;
+                    -webkit-text-size-adjust:none;
+                    -webkit-transform : scale(0.7,0.7);//缩放指定dom，但必须是block级
+                    
+                }
+            } 
+        }
+    }
+}
+
+
+</style>
