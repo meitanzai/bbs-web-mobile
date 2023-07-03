@@ -83,4 +83,4 @@ npm run build
 
 ## 前端界面
 
-![输入图片说明](bbs-web-pc_%E5%89%8D%E7%AB%AF%E5%9B%BE%E7%89%87_v2022.11.24.png)
+![输入图片说明](bbs-web-mobile_%E5%89%8D%E7%AB%AF%E5%9B%BE%E7%89%87_v2023.7.3.jpg)
