@@ -1,7 +1,7 @@
 {
   "name": "bbs-web-mobile",
   "private": true,
-  "version": "2022.11.24",
+  "version": "2023.7.3",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",

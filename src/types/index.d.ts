@@ -71,6 +71,7 @@ export interface User {
     userRoleNameList: Array<string>;//话题允许查看的角色名称集合
 	type: number;//用户类型 10:本地账号密码用户 20: 手机用户 30: 邮箱用户 40:微信用户 80:其他用户
     allowUserDynamic: boolean;//是否允许显示用户动态
+    ipAddress: string;//IP地址
 }
 
 
@@ -178,7 +179,7 @@ export interface Topic {
     sort: number;//排序
     essence: boolean;//精华
     status: number;//状态 10.待审核 20.已发布 110.待审核删除 120.已发布删除
-
+    ipAddress: string;//IP地址
     avatar: string;//base64格式头像
 }
 //图片信息
@@ -279,7 +280,7 @@ export interface Comment {
     userRoleNameList: Array<string>;//用户角色名称集合
     totalReply: number;//总回复数
     replyList: Array<Reply>;//回复集合
-
+    ipAddress: string;//IP地址
     avatar: string;//base64格式头像
 }
 
@@ -306,6 +307,16 @@ export interface Reply {
     nickname: string;//呢称
     avatarPath: string;//头像路径
     avatarName: string;//头像名称
+
+    friendReplyId: string;//对方回复Id
+    friendReplyIdGroup: string;//对方回复Id组
+    isFriendStaff: boolean;//对方是否是员工
+    friendUserName: string;//对方用户名称
+    friendAccount: string;//对方账号
+    friendNickname: string;//对方呢称
+    friendAvatarPath: string;//对方头像路径
+    friendAvatarName: string;//对方头像名称
+
     userInfoStatus: number;//用户信息状态
     topicId: string;//话题Id
     topicTitle: string;//话题Id
@@ -315,8 +326,9 @@ export interface Reply {
     lastUpdateTime: string;//最后修改时间
     status: number;//状态 10.待审核 20.已发布
     userRoleNameList: Array<string>;//用户角色名称集合
-
+    ipAddress: string;//IP地址
     avatar: string;//base64格式头像
+    friendAvatar: string;//对方头像  base64格式头像
 }
 
 //问题标签
@@ -356,7 +368,7 @@ export interface Question {
     status: number;//状态 10.待审核 20.已发布 110.待审核删除 120.已发布删除
     amount: string;//悬赏金额
     point: string;//悬赏积分
-    
+    ipAddress: string;//IP地址
     avatar: string;//base64格式头像
 }
 //问题标签关联
@@ -368,7 +380,7 @@ export interface QuestionTagAssociation {
     userName: string;//用户名称
 }
 //追加问题项
-export interface QuestionTagAssociation {
+export interface AppendQuestionItem {
     id: string;//Id
     content: string;//追加内容
     postTime: string;//追加时间
@@ -394,7 +406,7 @@ export interface Answer {
     userRoleNameList: Array<string>;//用户角色名称集合
     totalReply: number;//总回复数
     answerReplyList: Array<AnswerReply>;//回复集合
-
+    ipAddress: string;//IP地址
     avatar: string;//base64格式头像
 }
 //答案回复
@@ -406,6 +418,16 @@ export interface AnswerReply {
     nickname: string;//呢称
     avatarPath: string;//头像路径
     avatarName: string;//头像名称
+
+    friendReplyId: string;//对方回复Id
+    friendReplyIdGroup: string;//对方回复Id组
+    isFriendStaff: boolean;//对方是否是员工
+    friendUserName: string;//对方用户名称
+    friendAccount: string;//对方账号
+    friendNickname: string;//对方呢称
+    friendAvatarPath: string;//对方头像路径
+    friendAvatarName: string;//对方头像名称
+
     userInfoStatus: number;//用户信息状态
     userRoleNameList: Array<string>;//用户角色名称集合
 
@@ -416,8 +438,9 @@ export interface AnswerReply {
     postTime: string;//回复时间
     lastUpdateTime: string;//最后修改时间
     status: number;//状态 10.待审核 20.已发布 110.待审核用户删除 120.已发布用户删除 100010.待审核员工删除 100020.已发布员工删除
-    
+    ipAddress: string;//IP地址
     avatar: string;//base64格式头像
+    friendAvatar: string;//对方头像  base64格式头像
 }
 
 //搜索结果
@@ -778,4 +801,41 @@ export interface UserLoginLog {
 }
 
 
+//举报分类
+export interface ReportType {
+    id: string;//Id
+    name: string;//分类名称
+    parentId: string;//所属父类Id
+    childType: Array<ReportType>;//子分类
+    sort: number;//排序
+    giveReason:boolean;//是否需要说明理由
+    childNodeNumber: number;//子节点数量
+    parentIdGroup: number;//父Id组
+}
 
+//举报
+export interface Report{
+    id: string;//Id
+    userId: string;//用户Id
+    userName: string;//用户名称
+    account: string;//账号
+    nickname: string;//呢称
+    avatarPath: string;//头像路径
+    avatarName: string;//头像名称
+    staffAccount: string;//处理举报的员工账号
+    reportTypeId: string;//举报分类Id
+    reportTypeName: string;//举报分类名称
+    parameterId: string;//参数Id
+    extraParameterId: string;//扩展参数Id
+    module: number;//模块
+    reason: string;//举报理由
+    processResult: string;//处理结果
+    remark: string;//备注
+    imageInfoList: Array<ImageInfo>;//图片信息集合
+    postTime: string;//举报时间
+    ip: string;//IP
+    ipAddress: string;//IP归属地
+    processCompleteTime: string;//处理完成时间
+    status: number;//处理状态
+    version: number;//版本号
+}

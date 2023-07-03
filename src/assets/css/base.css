@@ -196,6 +196,12 @@ https://github.com/youzan/vant/blob/main/packages/vant/src/style/css-variables.l
 	margin-right: 6px;
 	color: var(--van-gray-8);
 }
+.custom-action-sheetModule .van-action-sheet__content{
+	margin-bottom: 52px;
+}
+.custom-action-sheetModule .van-action-sheet__content .van-cell{
+	padding: 14px 16px;
+}
 
 /* 表单 */
 .form-container .cell-field{
@@ -406,3 +412,48 @@ div.code-toolbar > .toolbar > .toolbar-item > span:focus{
 	color:  var(--van-gray-7);
 }
 
+
+
+/**回复时间线**/
+.timeline{
+    margin:0;
+    font-size:14px;
+    list-style:none;
+}
+.timeline .timeline-item {
+    position: relative;
+}
+.timeline .timeline-item :last-child .tail{
+   	display:none;
+}
+.timeline .timeline-item .tail {
+	position: absolute;
+	left: 2px;
+	top: 77px;
+	height: 100%;
+	border-left: 1px solid #79bbff;
+}
+/* 最后一个点上的线 */
+.timeline .timeline-item .last-tail{
+	position: absolute;
+	left: 2px;
+	top: 77px;
+	height: 58px;
+	border-left: 1px solid #79bbff;
+}
+.timeline .timeline-item .node--normal {
+	left: -1px;
+	width: 6px;
+	height: 6px;
+}
+.timeline .timeline-item .node {
+	position: absolute;
+	background-color: #79bbff;
+	border-color: #79bbff;
+	border-radius: 50%;
+	box-sizing: border-box;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	top: 77px;
+}

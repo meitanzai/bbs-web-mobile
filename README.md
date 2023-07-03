@@ -1,5 +1,4 @@
 ##  Spring Boot 轻论坛后端请移步至 [https://gitee.com/diyhi/bbs-pro](https://gitee.com/diyhi/bbs-pro)
-###  前台前后端分离电脑版前端请移步至 [https://gitee.com/diyhi/bbs-web-pc ](https://gitee.com/diyhi/bbs-web-pc )
 
 <br>
 
@@ -12,7 +11,8 @@
 
 |  轻论坛后端版本   | 前端版本  |
 |  ----  | ----  |
-| v5.8  | v2022.11.24 |
+| v5.8 <br>v5.9 | v2022.11.24 |
+| v6.0  | v2023.7.3|
 
 <br><br>
 
@@ -81,5 +81,3 @@ npm run build
 
 
 ## 前端界面
-
-![输入图片说明](bbs-web-pc_%E5%89%8D%E7%AB%AF%E5%9B%BE%E7%89%87_v2022.11.24.png)

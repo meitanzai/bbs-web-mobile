@@ -10,7 +10,7 @@
                 </van-nav-bar>
             </van-sticky>
 
-            <van-pull-refresh v-model="form.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="form.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
             <div class="editUserModule" >
                 <van-form ref="formRef" :scroll-to-error="true" class="form-container">
                     <van-cell-group inset>

@@ -28,15 +28,15 @@ router.beforeEach((to,from,next)=>{
         statistic(to.fullPath,from.fullPath);
     }
 	let scrollTop = getScrollTop();
-    if(scrollTop >0){
-        addScrollTop(from.fullPath,scrollTop) 
-    }
+    addScrollTop(from.fullPath,scrollTop) 
+    
 	next();
 })
 // afterEach记录历史记录
 router.afterEach((to, from) => {
     nextTick(()=>{
         pushHistory(to.fullPath)
+        
     })
 })
 

@@ -3,7 +3,7 @@
     <div class="main">
         <div class="main-container">
             <van-nav-bar title="帮助中心"></van-nav-bar>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="helpModule">
                     <div class="container" v-for="helpType in state.helpTypeList">
                         <van-divider class="line">{{helpType.name}}</van-divider>

@@ -5,7 +5,7 @@
             <van-sticky>
                 <van-search v-model.trim="state.keyword" placeholder="搜索" @search="onSearch" class="searchKeyword"/>
             </van-sticky>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="searchModule" >
                     <van-list v-model:loading="state.isLoading" :finished="state.isFinished" v-model:error="state.isError" error-text="请求失败，点击重新加载" :finished-text="(state.keyword != null && state.keyword != '' && state.currentpage > 0) ? '没有更多了' : ''" @load="onLoad"> 
                         <template v-for="(searchResult,index) in state.searchResultList" >

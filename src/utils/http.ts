@@ -393,7 +393,7 @@ axiosInstance.interceptors.response.use((response: AxiosResponse) => {
 });
 
 
-//会话续期
+//刷新令牌
 export let refreshToken = () =>{
     let formData = new FormData();
 
@@ -409,4 +409,77 @@ export let refreshToken = () =>{
 
 	//});
 };
+//本地刷新会话续期
+export let localRefreshToken = () =>{
+   
+    refreshToken().then(res=> {
+        if(res){
+            let result: any = res.data;
+            if(result){
+                let tokenObject = JSON.parse(result);
+                //访问令牌和刷新令牌存储到localStorage
+                window.localStorage.setItem("bbsToken", JSON.stringify({accessToken : tokenObject.accessToken, refreshToken : tokenObject.refreshToken}));
+            };
+        }
+    });
+};
 
+//原生ajax刷新会话续期（在Hls.js监听事件里调用axios会发生错误，这里用原生方法代替）
+export let nativeRefreshToken = () =>{
+    let xmlhttp = new window.XMLHttpRequest();
+    xmlhttp.open('POST', import.meta.env.VITE_API_URL+"refreshToken" , false);//同步
+    xmlhttp.setRequestHeader("X-Requested-With","XMLHttpRequest");//标记报头为AJAX
+
+    //从localStorage中获取登录令牌
+    let bbsToken = window.localStorage.getItem('bbsToken');
+    if(bbsToken != null){
+        let tokenObject = JSON.parse(bbsToken);
+        //会话token
+        let sessionToken = tokenObject.accessToken+","+tokenObject.refreshToken;
+        // header 添加参数
+        xmlhttp.setRequestHeader("Authorization", 'Bearer '+sessionToken);
+    } 
+
+    xmlhttp.onreadystatechange = function(){
+        if (xmlhttp.readyState == 4) {//readystate 
+            if(xmlhttp.status == 200){
+                let result = xmlhttp.responseText;
+                if(result != ""){
+                    let tokenObject = JSON.parse(result);
+                    //访问令牌和刷新令牌存储到localStorage
+                    window.localStorage.setItem("bbsToken", JSON.stringify({accessToken : tokenObject.accessToken, refreshToken : tokenObject.refreshToken}));
+                }
+            }
+        }
+    };
+    xmlhttp.send(null);
+};
+//原生ajax查询视频重定向（在Hls.js监听事件里调用axios会发生错误，这里用原生方法代替）
+export let nativeQueryVideoRedirect = (url:string,callback:any) =>{
+    let xmlhttp = new window.XMLHttpRequest();
+    xmlhttp.open('GET', url , false);//同步
+    xmlhttp.setRequestHeader("X-Requested-With","XMLHttpRequest");//标记报头为AJAX
+
+    //从localStorage中获取登录令牌
+    let bbsToken = window.localStorage.getItem('bbsToken');
+    if(bbsToken != null){
+        let tokenObject = JSON.parse(bbsToken);
+        //会话token
+        let sessionToken = tokenObject.accessToken+","+tokenObject.refreshToken;
+        // header 添加参数
+        xmlhttp.setRequestHeader("Authorization", 'Bearer '+sessionToken);
+    } 
+
+    xmlhttp.onreadystatechange = function(){
+        if (xmlhttp.readyState == 4) {//readystate 
+            if(xmlhttp.status == 200){
+                let result = xmlhttp.responseText;
+                if(result != ""){
+                    let date = JSON.parse(result);
+                    callback(date);
+                }
+            }
+        }
+    };
+    xmlhttp.send(null);
+};

@@ -223,12 +223,12 @@
 <style scoped lang="scss">
 .updateAvatar-container{
     .screenshot{
-        height: 400px;
+        min-height: 400px;
         margin: 50px 8px 20px 8px;
         background: var(--van-gray-1);
     }
     .button-container{
-        margin-top: 5px;
+        margin-top: 15px;
         margin-bottom: 20px;
         display: flex;
         justify-content: center;

@@ -51,7 +51,7 @@ const routes = [
         meta: {cacheNumber:0},
         beforeEnter: (to:any, from:any, next:any) => {
             const store = useStore(pinia);
-            if(from.name == 'index' || from.name == 'editTopic' || from.name == 'login'){//如果来自指定页,则删除缓存
+            if(from.name == 'index' || from.name == 'editTopic' || from.name == 'login' || from.name == 'reportList' || from.name == 'remindList'){//如果来自指定页,则删除缓存
                 store.setCacheNumber(to.name)
             }
             next();
@@ -93,7 +93,7 @@ const routes = [
         meta: {cacheNumber:0},
         beforeEnter: (to:any, from:any, next:any) => {
             const store = useStore(pinia);
-            if(from.name == 'askList' || from.name == 'login'){//如果来自指定页,则删除缓存
+            if(from.name == 'askList' || from.name == 'login' || from.name == 'reportList' || from.name == 'remindList'){//如果来自指定页,则删除缓存
                 store.setCacheNumber(to.name)
             }
             next();
@@ -537,6 +537,12 @@ const routes = [
         path: '/user/control/point',//积分
         name: 'point',
         component: () => import('@/views/home/point.vue'),
+        meta: {cacheNumber:0}
+    },
+    {
+        path: '/user/control/reportList',//举报列表
+        name: 'reportList',
+        component: () => import('@/views/home/reportList.vue'),
         meta: {cacheNumber:0}
     },
     {

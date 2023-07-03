@@ -9,7 +9,7 @@
                     </template>
                 </van-nav-bar>
             </van-sticky>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh"> 
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" :disabled="isPopupWindow()" @refresh="onRefresh"> 
                 <div class="questionContentModule">
                      
                     <div class="head" v-if="state.question != null && Object.keys(state.question).length>0">
@@ -57,6 +57,9 @@
                                 </div>
                                 <div class="right-layout">
                                     <div class="statistics">
+                                        <template v-if="state.question.ipAddress != null && state.question.ipAddress != ''">
+                                            <Icon name="map-pin-line" :size="convertViewportWidth('14px')" class="icon"/><span class="ipAddress">{{state.question.ipAddress}}</span>
+                                        </template>
                                         <Icon name="info-alt" :size="convertViewportWidth('14px')" class="icon"/><span class="answerTotal">{{state.question.answerTotal}}</span>
 				            	        <Icon name="view" :size="convertViewportWidth('14px')" class="icon"/><span class="viewTotal">{{state.question.viewTotal}}</span>
                                         
@@ -72,7 +75,7 @@
                             </div> 
                         
                         </div>
-                        <div class="questionContent" v-if="!state.isQuestionSkeleton">
+                        <div class="questionContent" v-if="!state.isQuestionSkeleton" :class="router.currentRoute.value.query.reportModule !=undefined && parseInt(router.currentRoute.value.query.reportModule as string) == 40 ? 'reportMark' : ''">
                             <div class="reward" v-if="parseFloat(state.question.amount) > 0 || Long.fromString(String(state.question.point)).gt(0)">
                                 <div class="info" >
                                     <Icon name="deposit" size="26px" class="icon"/>
@@ -87,7 +90,7 @@
                             <div class="cancelAccount" v-if="state.question.account == null || state.question.account == ''">此用户账号已注销</div>
                             
                             <div :ref="'question_'+state.question.id">
-                                <RenderTemplate @click-onZoomPicture="onZoomPicture" :html="state.question.content"></RenderTemplate>
+                                <RenderTemplate @click-onZoomPicture="onZoomPicture" @load-onLoadPicture="onLoadPicture" :html="state.question.content"></RenderTemplate>
                                         
                             </div>
 
@@ -101,7 +104,7 @@
                                     <span class="appendTime">{{appendQuestionItem.postTime}}</span>
                                 </div>
                                 <div class="appendContent" :ref="'appendQuestion_'+appendQuestionItem.id">
-                                    <RenderTemplate @click-onZoomPicture="onZoomPicture" :html="appendQuestionItem.content"></RenderTemplate>
+                                    <RenderTemplate @click-onZoomPicture="onZoomPicture" @load-onLoadPicture="onLoadPicture" :html="appendQuestionItem.content"></RenderTemplate>
                                 </div> 
                             </div>		
                         </template>
@@ -123,7 +126,7 @@
                             </div>
                         </div> 
                     </div>
-                    <!-- 话题允许回答 -->
+                    <!-- 问题允许回答 -->
                     <div class="allow-answer-wrap" v-if="state.question.allow">
                         <!-- 已登录 -->
                         <div v-if="store_systemUser != null && Object.keys(store_systemUser).length>0">
@@ -142,12 +145,17 @@
                         </div>
                     </div>
 
-                    <!-- 话题不允许回答 -->
+                    <!-- 问题不允许回答 -->
 					<div class="no-answer-wrap" v-if="state.question != null && Object.keys(state.question).length>0 && !state.question.allow">
                         <div class="no-answer">
                             本问题回答已关闭
                         </div>
 					</div>
+
+                    <!-- 上一页答案 -->
+                    <div class="previous-answer-wrap" v-if="state.initialPage >1">
+                        <van-button round block plain type="primary" native-type="submit" @click="queryPreviousAnswerList(state.questionId, state.initialPage-1)" >上一页答案</van-button>
+                    </div>
 
                     <!-- 追加提问 -->
                     <van-popup v-model:show="state.appendQuestionFormView" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
@@ -227,7 +235,7 @@
                 
                         <div class="answerList" v-if="state.answerList != null && state.answerList.length >0">
                         
-                            <div class="item van-hairline--bottom" :class="answer.adoption == true ? 'active' : ''" v-for="(answer,index) in state.answerList" :key="answer.id"  :ref="'answer_'+answer.id" >
+                            <div class="item van-hairline--bottom" :class="[answer.adoption == true ? 'active' : '',router.currentRoute.value.query.reportModule !=undefined && parseInt(router.currentRoute.value.query.reportModule as string) == 50 && answer.id == router.currentRoute.value.query.answerId ? 'reportMark' : '']" v-for="(answer,index) in state.answerList" :key="answer.id"  :ref="'answer_'+answer.id" >
                                 <div class="adoption" v-if="answer.adoption">
                                     <div class="ribbon-wrapper">
                                         <div class="ribbon">最佳答案</div>
@@ -255,14 +263,14 @@
                                             <span class="userRoleName" v-for="roleName in answer.userRoleNameList">{{roleName}}</span>
                                             <span class="staff" v-if="answer.isStaff">官方人员</span>
                                             <div v-if="answer.account == null || answer.account == ''" class="cancelNickname">已注销</div>
-                                            <span class="time">{{answer.postTime}}</span>
+                                            <span class="time">{{answer.postTime}}<span v-if="answer.ipAddress != null && answer.ipAddress != ''"><span class="separate">·</span>{{answer.ipAddress}}</span></span>
                                             
                                         </div>
                                         
                                     </div>
                                     <div class="right-layout">
-                                        <div class="floor" v-if="answer.adoption == false">{{index+1}}楼</div>
-                                        <div class="more" v-if="onAnswerPopoverActions(answer).length >0">
+                                        <div class="floor" v-if="answer.adoption == false">{{calculateFloor(answer.id)}}楼</div>
+                                        <div class="more active-more" v-if="onAnswerPopoverActions(answer).length >0">
                                             <van-popover v-model:show="state.showAnswerPopover[answer.id]" placement="left-start" :overlay="true" overlay-class="custom-popoverModule-overlay" :actions="onAnswerPopoverActions(answer)" @select="onAnswerPopoverSelect">
                                                 <template #reference>
                                                     <van-icon name="ellipsis" :size="convertViewportWidth('16px')"/>
@@ -278,87 +286,148 @@
                                     
 
                                         <div :ref="'answerContent_'+answer.id">
-                                            <RenderTemplate @click-onZoomPicture="onZoomPicture" :html="answer.content"></RenderTemplate>
+                                            <RenderTemplate @click-onZoomPicture="onZoomPicture" @load-onLoadPicture="onLoadPicture" :html="answer.content"></RenderTemplate>
                                         
                                         </div>
                                     </div>
 
-                                    <div class="replyList" v-if="answer.answerReplyList != null && answer.answerReplyList.length >0">
-                                        <div class="reply-container van-hairline--top" v-for="(reply,index2) in answer.answerReplyList" :key="reply.id" v-show="state.replyExpandOrShrink.get(answer.id) || (state.replyExpandOrShrink.get(answer.id) == false && index2 <2)">
-
-                                            <div class="top-container" >
-                                                <div class="left-layout">
-                                                    <router-link v-if="reply.account != null && reply.account != ''" tag="a" :to="{path:'/user/control/home',query: {userName: reply.userName}}">
-                                                        <span class="avatarImg">
-                                                            <img v-if="reply.avatarName != null" :src="reply.avatarPath+'100x100/'+reply.avatarName" class="img">
-                                                        
-                                                            <img v-if="reply.avatarName == null" :src="reply.avatar" class="img"/>
-                                                        </span>
-                                                    </router-link>
-                                                    <template v-if="reply.account == null || reply.account == ''">
-                                                        <span class="avatarImg">
-                                                            <img v-if="reply.avatarName == null" :src="reply.avatar" class="img"/>
-                                                        </span>
-                                                    </template>
-                                                </div>
-                                                <div class="middle-layout">
-                                                    <div class="userInfo">
-                                                        <span v-if="(reply.nickname == null || reply.nickname == '') && reply.account != null && reply.account != ''" class="account">{{reply.account}}</span>
-                                                        <span v-if="reply.nickname != null && reply.nickname != ''" class="account">{{reply.nickname}}</span>
-                                                        <span class="userRoleName" v-for="roleName in reply.userRoleNameList">{{roleName}}</span>
-                                                        <span class="staff" v-if="reply.isStaff">官方人员</span>
-                                                        <div v-if="reply.account == null || reply.account == ''" class="cancelNickname">已注销</div>
-                                                        <span class="time">{{reply.postTime}}</span>
-                                                        
+                                    <div class="replyList timeline" v-if="answer.answerReplyList != null && answer.answerReplyList.length >0">
+                                        <div class="reply-container timeline-item" :class="[reply.friendUserName != null && reply.friendUserName != '' ? 'node-position':'',(reply.friendUserName != null && reply.friendUserName != '' && state.line.keys().next().value == reply.id) ? 'first-position':'']" v-for="(reply,index2) in answer.answerReplyList" :key="reply.id" v-show="state.replyExpandOrShrink.get(answer.id) || (state.replyExpandOrShrink.get(answer.id) == false && index2 <state.viewNumber)" :ref="'replyData_'+reply.id" >
+                                            <div class="tail" v-if="state.line.get(reply.id)"></div>
+                                            <div class="last-tail" v-if="state.dot.size >0 && [...state.dot][state.dot.size-1][0] == reply.id"></div>
+                                            <div class="node node--normal"  v-if="state.dot.get(reply.id)"></div>
+                                            <div class="replyItem van-hairline--top ">
+                                                <div :class="router.currentRoute.value.query.reportModule !=undefined && parseInt(router.currentRoute.value.query.reportModule as string) == 60 && reply.id == router.currentRoute.value.query.replyId ? 'reply-reportMark' : ''">
+                                                    <div class="top-container" >
+                                                        <div class="left-layout">
+                                                            <router-link v-if="reply.account != null && reply.account != ''" tag="a" :to="{path:'/user/control/home',query: {userName: reply.userName}}">
+                                                                <span class="avatarImg">
+                                                                    <img v-if="reply.avatarName != null" :src="reply.avatarPath+'100x100/'+reply.avatarName" class="img">
+                                                                
+                                                                    <img v-if="reply.avatarName == null" :src="reply.avatar" class="img"/>
+                                                                </span>
+                                                            </router-link>
+                                                            <template v-if="reply.account == null || reply.account == ''">
+                                                                <span class="avatarImg">
+                                                                    <img v-if="reply.avatarName == null" :src="reply.avatar" class="img"/>
+                                                                </span>
+                                                            </template>
+                                                        </div>
+                                                        <div class="middle-layout">
+                                                            <div class="userInfo">
+                                                                <span v-if="(reply.nickname == null || reply.nickname == '') && reply.account != null && reply.account != ''" class="account">{{reply.account}}</span>
+                                                                <span v-if="reply.nickname != null && reply.nickname != ''" class="account">{{reply.nickname}}</span>
+                                                                <span class="userRoleName" v-for="roleName in reply.userRoleNameList">{{roleName}}</span>
+                                                                <span class="staff" v-if="reply.isStaff">官方人员</span>
+                                                                <div v-if="reply.account == null || reply.account == ''" class="cancelNickname">已注销</div>
+                                                                <span class="time">{{reply.postTime}}<span v-if="reply.ipAddress != null && reply.ipAddress != ''"><span class="separate">·</span>{{reply.ipAddress}}</span></span>
+                                                                
+                                                            </div>
+                                                            
+                                                        </div>
+                                                        <div class="right-layout">
+                                                            <div class="more" v-if="onReplyPopoverActions(reply).length >0">
+                                                                <van-popover v-model:show="state.showReplyPopover[reply.id]" placement="left-start" :overlay="true" overlay-class="custom-popoverModule-overlay" :actions="onReplyPopoverActions(reply)" @select="onReplyPopoverSelect">
+                                                                    <template #reference>
+                                                                        <van-icon name="ellipsis" :size="convertViewportWidth('16px')"/>
+                                                                    </template>
+                                                                </van-popover>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    
-                                                </div>
-                                                <div class="right-layout">
-                                                    <div class="more" v-if="onReplyPopoverActions(reply).length >0">
-                                                        <van-popover v-model:show="state.showReplyPopover[reply.id]" placement="left-start" :overlay="true" overlay-class="custom-popoverModule-overlay" :actions="onReplyPopoverActions(reply)" @select="onReplyPopoverSelect">
-                                                            <template #reference>
-                                                                <van-icon name="ellipsis" :size="convertViewportWidth('16px')"/>
-                                                            </template>
-                                                        </van-popover>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="bottom-container">
-                                                <div class="replyContent">
-                                                    <div v-if="reply.account == null || reply.account == ''" class="cancelAccount">此用户账号已注销</div>
-                                                    {{reply.content}}
-                                                </div>
-
-                                            </div>
-                                            <!-- 修改回复 -->
-                                            <van-popup v-model:show="state.editReplyFormView[reply.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" class="custom-bottom-popupModule" :style="{ height: '80%' }" round>
-                                                <div class="editReplyModule">
-                                                    <van-form :scroll-to-error="true" class="form-container">
-                                                    
-                                                        <van-field v-model="state.editReplyContentField[reply.id]" rows="6" autosize type="textarea" placeholder="请输入内容" :error-message="error.replyContent.get('editReply-'+reply.id)" class="replyContent-item"/>
-                                                        <van-field v-model="state.captchaValue['editReply-'+reply.id]"  @change.native="checkCaptchaValueRules('editReply-'+reply.id)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('editReply-'+reply.id)" :error-message="error.captchaValue.get('editReply-'+reply.id)">
-                                                            <template #button>
-                                                                <van-image :src="state.imgUrl.get('editReply-'+reply.id)" @click="replaceCaptcha('editReply-'+reply.id)" class="captcha-image"/>
-                                                            </template>
-                                                            <template #extra >
-                                                                <span class="captcha-replace" @click="replaceCaptcha('editReply-'+reply.id)">换一幅</span>
-                                                            </template>
-                                                        </van-field>
-
-                                                        <van-field :error-message="error.reply.get('editReply-'+reply.id)">
-                                                            <template #input>
-                                                                <div class="submitButton">
-                                                                    <van-button round block type="primary" native-type="submit" @mousedown="onEditReply(reply.id)" :disabled="state.allowSubmit.get('editReply-'+reply.id)">提交</van-button>
+                                                    <div class="bottom-container">
+                                                        <!-- 回复对方用户 -->
+                                                        <div class="friendInfo-wrap" v-if="reply.friendUserName != null && reply.friendUserName != ''">
+                                                            <div class="friendInfo">
+                                                                <div class="icon-container">
+                                                                    <van-icon name="play" :size="convertViewportWidth('14px')" class="icon"/>
                                                                 </div>
-                                                            </template>
-                                                        </van-field>
-                                                    </van-form>
+                                                                <div class="avatarImg-container">
+                                                                    <router-link v-if="reply.friendUserName!= null && reply.friendUserName != ''" tag="a" :to="{path:'/user/control/home',query: {userName: reply.friendUserName}}">
+                                                                        <span class="avatarImg">
+                                                                            <img v-if="reply.friendAvatarName != null" :src="reply.friendAvatarPath+'100x100/'+reply.friendAvatarName" class="img">
+                                                                        
+                                                                            <img v-if="reply.friendAvatarName == null" :src="reply.friendAvatar" class="img"/>
+                                                                        </span>
+                                                                    </router-link>
+                                                                </div>
+                                                                <div class="nameInfo-container">
+                                                                    <span class="nameInfo" >
+                                                                        <span v-if="reply.friendAccount == null || reply.friendAccount == ''" class="cancelNickname">已注销</span>
+                                                                        <router-link tag="a" v-if="reply.friendAccount != null && reply.friendAccount != ''" class="userName" :to="{path:'/user/control/home',query: {userName: reply.friendUserName}}">
+                                                                            <span v-if="reply.friendNickname != null && reply.friendNickname != ''">{{reply.friendNickname}}</span>
+                                                                            <span v-if="reply.friendNickname == null || reply.friendNickname == ''">{{reply.friendAccount}}</span>
+                                                                        </router-link>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="replyContent" @click="clickReplyLevel(answer.id,reply.id)">
+                                                            <div v-if="reply.account == null || reply.account == ''" class="cancelAccount">此用户账号已注销</div>
+                                                            {{reply.content}}
+                                                        </div>
+
+                                                    </div>
+                                                    <!-- 回复对方 -->
+                                                    <van-popup v-model:show="state.addReplyFriendFormView[reply.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" class="custom-bottom-popupModule" :style="{ height: '80%' }" round>
+                                                        <div class="addReplyFriendModule">
+                                                            <van-form :scroll-to-error="true" class="form-container">
+                                                                <van-field class="friendUser">
+                                                                    <template #input>
+                                                                        @{{state.friendUser}}
+                                                                    </template>
+                                                                </van-field>
+                                                                <van-field v-model="state.addReplyFriendContentField[reply.id]" rows="6" autosize type="textarea" placeholder="请输入内容" :error-message="error.replyContent.get('addReplyFriend-'+reply.id)" class="replyContent-item"/>
+                                                                <van-field v-model="state.captchaValue['addReplyFriend-'+reply.id]"  @change.native="checkCaptchaValueRules('addReplyFriend-'+reply.id)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('addReplyFriend-'+reply.id)" :error-message="error.captchaValue.get('addReplyFriend-'+reply.id)">
+                                                                    <template #button>
+                                                                        <van-image :src="state.imgUrl.get('addReplyFriend-'+reply.id)" @click="replaceCaptcha('addReplyFriend-'+reply.id)" class="captcha-image"/>
+                                                                    </template>
+                                                                    <template #extra >
+                                                                        <span class="captcha-replace" @click="replaceCaptcha('addReplyFriend-'+reply.id)">换一幅</span>
+                                                                    </template>
+                                                                </van-field>
+
+                                                                <van-field :error-message="error.reply.get('addReplyFriend-'+reply.id)">
+                                                                    <template #input>
+                                                                        <div class="submitButton">
+                                                                            <van-button round block type="primary" native-type="submit" @mousedown="onAddReplyFriend(answer.id,reply.id)" :disabled="state.allowSubmit.get('addReplyFriend-'+reply.id)">提交</van-button>
+                                                                        </div>
+                                                                    </template>
+                                                                </van-field>
+                                                            </van-form>
+                                                        </div>
+                                                    </van-popup>
+                                                    <!-- 修改回复 -->
+                                                    <van-popup v-model:show="state.editReplyFormView[reply.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" class="custom-bottom-popupModule" :style="{ height: '80%' }" round>
+                                                        <div class="editReplyModule">
+                                                            <van-form :scroll-to-error="true" class="form-container">
+                                                            
+                                                                <van-field v-model="state.editReplyContentField[reply.id]" rows="6" autosize type="textarea" placeholder="请输入内容" :error-message="error.replyContent.get('editReply-'+reply.id)" class="replyContent-item"/>
+                                                                <van-field v-model="state.captchaValue['editReply-'+reply.id]"  @change.native="checkCaptchaValueRules('editReply-'+reply.id)" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('editReply-'+reply.id)" :error-message="error.captchaValue.get('editReply-'+reply.id)">
+                                                                    <template #button>
+                                                                        <van-image :src="state.imgUrl.get('editReply-'+reply.id)" @click="replaceCaptcha('editReply-'+reply.id)" class="captcha-image"/>
+                                                                    </template>
+                                                                    <template #extra >
+                                                                        <span class="captcha-replace" @click="replaceCaptcha('editReply-'+reply.id)">换一幅</span>
+                                                                    </template>
+                                                                </van-field>
+
+                                                                <van-field :error-message="error.reply.get('editReply-'+reply.id)">
+                                                                    <template #input>
+                                                                        <div class="submitButton">
+                                                                            <van-button round block type="primary" native-type="submit" @mousedown="onEditReply(reply.id)" :disabled="state.allowSubmit.get('editReply-'+reply.id)">提交</van-button>
+                                                                        </div>
+                                                                    </template>
+                                                                </van-field>
+                                                            </van-form>
+                                                        </div>
+                                                    </van-popup>
                                                 </div>
-                                            </van-popup>
+                                            </div>
                                         </div>
-                                        <div class="link" v-if="answer.answerReplyList.length >2">
+                                        <div class="link" v-if="answer.answerReplyList.length >state.viewNumber">
                                             <span @click="telescopicReply(answer.id);" v-if="state.replyExpandOrShrink.get(answer.id)">点击收缩</span>
-                                            <span @click="telescopicReply(answer.id);" v-else>剩余{{answer.answerReplyList.length-2}}条</span>
+                                            <span @click="telescopicReply(answer.id);" v-else>剩余{{answer.answerReplyList.length-state.viewNumber}}条</span>
                                         </div>
                                     </div>
 
@@ -424,7 +493,70 @@
                             </div>
                         </div>
                     </van-list>
+                    <!-- 举报 -->
+                    <van-popup v-model:show="state.addReportFormView" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
+                        <div class="addReportModule">
+                            <van-form :scroll-to-error="true" class="form-container">
+                                <van-cell-group inset>
+                                    <van-field center :error-message="error.reportTypeId">
+                                        <template #input>
+                                            <div class="reportType-container" style="width: 100%;">
+                                                <van-radio-group v-model="state.reportTypeId" @change="selectReportType(state.reportTypeList)">
+                                                    <div class="reportType-group" v-for="reportType in state.reportTypeList">
+                                                        <!--  仅有一级分类 -->
+                                                        <div v-if="reportType.childType.length ==0">
+                                                            <ul class="reportType-list">
+                                                                <li class="reportType-item">
+                                                                    <van-radio :name="reportType.id">{{reportType.name}}</van-radio>
+                                                                </li>
+                                                            </ul>
+                                                            
+                                                        </div>
+                                                        <div v-else><!-- 含有多级分类 -->
+                                                            <p class="reportType-name">{{reportType.name}}</p>
+                                                            <ul class="reportType-list reportType-list-multiple">
+                                                                <li class="reportType-item reportType-item-multiple" v-for="childReportType in reportType.childType">
+                                                                    <van-radio :name="childReportType.id" >{{childReportType.name}}</van-radio>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </van-radio-group>
+                                            </div>
+                                        </template>
+                                    </van-field>
+                                    <van-field center :error-message="error.reason" v-if="state.show_giveReason">
+                                        <template #input>
+                                            <div style="width: 100%;">
+                                                <van-field v-model="state.reason"  placeholder="请填写举报理由"  rows="3" type="textarea" autosize maxlength="500" show-word-limit/>
+                                            </div>
+                                        </template>
+                                    </van-field>
+                                </van-cell-group>
 
+                                <van-uploader v-if="state.show_giveReason && state.reportMaxImageUpload >0" class="fileList" v-model="state.fileList" :before-read="beforeRead" :accept="'.jpg,.jpeg,.gif,.png,.bmp'">
+                                    
+                                </van-uploader>
+                              
+                                <van-field v-model="state.captchaValue['report']"  @change.native="checkCaptchaValueRules('report')" class="captcha-item captcha-input-left" label="验证码" placeholder="请输入验证码" maxlength="4" center clearable v-if="state.showCaptcha.get('report')" :error-message="error.captchaValue.get('report')">
+                                    <template #button>
+                                        <van-image :src="state.imgUrl.get('report')" @click="replaceCaptcha('report')" class="captcha-image"/>
+                                    </template>
+                                    <template #extra >
+                                        <span class="captcha-replace" @click="replaceCaptcha('report')">换一幅</span>
+                                    </template>
+                                </van-field>
+
+                                <van-field :error-message="error.report">
+                                    <template #input>
+                                        <div class="submitButton">
+                                            <van-button round block type="primary" native-type="submit" @mousedown="onAddReportFormSubmit()" :disabled="state.allowSubmit.get('report')">提交</van-button>
+                                        </div>
+                                    </template>
+                                </van-field>
+                            </van-form>
+                        </div>
+                    </van-popup>
                 </div>
                 <!--  相似问题 集合 -->
                 <div class="likeQuestionModule" v-if="state.likeQuestionList != null && state.likeQuestionList.length >0">
@@ -450,9 +582,9 @@
     import { storeToRefs } from 'pinia';
     import { onBack } from '@/utils/history'
     import { convertViewportWidth } from '@/utils/px-to-viewport';
-    import { onBeforeRouteUpdate, useRouter } from 'vue-router'
+    import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
     import { AxiosResponse } from 'axios'
-    import { Answer, AnswerReply, PageView, Question } from "@/types/index";
+    import { Answer, AnswerReply, PageView, Question, ReportType } from "@/types/index";
     import { letterAvatar } from '@/utils/letterAvatar';
     import { escapeVueHtml } from '@/utils/escape';
     import { getLanguageClassName, getPageBasePath, processErrorInfo } from '@/utils/tool';
@@ -512,7 +644,10 @@
         totalrecord : 0, //总记录数
         currentpage : 0, //当前页码
         totalpage : 1, //总页数
-        maxresult: 12, //每页显示记录数    
+        maxresult: 12, //每页显示记录数 
+        
+        viewNumber:2,//回复伸缩 展示数量
+        initialPage : 0, //初始页码（当URL参数commentId有值时commentList的第一项页码数）
         
         replyExpandOrShrink :new Map(), //回复展开/收缩 map格式 key:答案Id value:是否展开
         allowAnswer:false,//是否显示答案表单
@@ -544,6 +679,22 @@
         
         likeQuestionList:[] as Array<Question>, //相似问题集合
 
+        addReportFormView:false,//举报表单
+        reportTypeId : ''as string,//举报分类Id
+        reason : ''as string,//举报理由
+        fileList : [] as any,//上传表单图片列表
+        parameterId : '' as string,//举报参数Id
+		module: 0 as number,//举报模块
+        reportTypeList:[] as Array<ReportType>,//举报分类列表
+        reportMaxImageUpload: 0 as number,//图片允许最大上传数量
+        show_giveReason:false,//是否显示说明理由表单
+
+
+        friendUser : '' as string,//对方用户
+        addReplyFriendContentField : {} as any, //添加回复对方内容项绑定 key:回复Id value:内容 示例{回复Id-1 : 内容,回复Id-2 : 内容}
+		addReplyFriendFormView : {} as any,//添加回复对方表单  key:回复Id value:是否显示 {回复Id-1 : 是否显示,回复Id-2 : 是否显示}
+        line : new Map(),//楼中楼的线  key:回复Id value:是否显示
+        dot : new Map(),//楼中楼的点  key:回复Id value:是否显示
 
         isRefreshing:false,//是否处于下拉加载中状态
         isError:false,//是否列表数据加载失败
@@ -580,7 +731,10 @@
         state.totalrecord = 0; //总记录数
         state.currentpage = 0; //当前页码
         state.totalpage = 1; //总页数
-        state.maxresult = 12;//每页显示记录数    
+        state.maxresult = 12;//每页显示记录数 
+
+        state.viewNumber = 2;//回复伸缩 展示数量
+        state.initialPage = 0; //初始页码（当URL参数commentId有值时commentList的第一项页码数）
         
         state.replyExpandOrShrink.clear(); //回复展开/收缩 map格式 key:答案Id value:是否展开
         state.allowAnswer = false;//是否显示答案表单
@@ -611,6 +765,12 @@
         state.allowSubmit.clear();//提交按钮disabled状态
         
         state.likeQuestionList.length = 0;//相似问题集合
+
+        state.friendUser = '';//对方用户
+        state.addReplyFriendContentField = {} as any; //添加回复对方内容项绑定 key:回复Id value:内容 示例{回复Id-1 : 内容,回复Id-2 : 内容}
+		state.addReplyFriendFormView = {} as any;//添加回复对方表单  key:回复Id value:是否显示
+        state.line.clear();//楼中楼的线  key:回复Id value:是否显示
+        state.dot.clear();//楼中楼的点  key:回复Id value:是否显示
          
         state.isError = false;//是否列表数据加载失败
         state.isFinished = false; 
@@ -629,12 +789,24 @@
         captchaValue : new Map<string,string>(),
         answer: new Map<string,string>(),//答案错误
         reply: new Map<string,string>(),//回复错误
+        reportTypeId:'',//举报分类Id
+        reason:'',//举报理由
+        image:'',//举报图片
+        report:''//举报
     })
 
 
     //加载列表
     const onLoad = () => {
-         queryAnswerList(state.questionId,'', '', state.currentpage+1);
+        let answerId = router.currentRoute.value.query.answerId != undefined ?router.currentRoute.value.query.answerId as string :'';
+        let replyId = router.currentRoute.value.query.replyId != undefined ?router.currentRoute.value.query.replyId as string :'';
+      
+        
+        if(answerId != '' && state.currentpage == 0){
+            queryAnswerList(state.questionId,answerId, replyId, undefined);
+        }else{
+            queryAnswerList(state.questionId,'', '', state.currentpage+1);
+        }
     }
 
 
@@ -723,14 +895,11 @@
         });
     }
 
-    //查询答案列表
-    const queryAnswerList = (questionId: string,answerId: string, replyId: string, page:number|undefined) => {
+    //查询上一页答案
+    const queryPreviousAnswerList = (questionId: string, page:number|undefined) => {
         let params = {} as any;
         params.questionId = questionId;
-        if(answerId != null && answerId != ''){
-            params.answerId = answerId;
-        }
-        if(page != undefined){
+        if(page != undefined && page >0){
             params.page = page;
         }
 
@@ -749,59 +918,83 @@
             state.isAnswerSkeleton = false;//关闭骨架屏
 
             if(data.records != null && data.records.length >0){
-                for(let i:number=0; i<data.records.length; i++){
+                //处理答案数据
+                processAnswerData(data);
+
+
+                for (let i:number = data.records.length - 1; i >= 0; i--) { // 倒序
                     let answer = data.records[i];
-                    state.replyExpandOrShrink.set(answer.id, false); //是否展开
-                    if(answer.nickname != null && answer.nickname !=''){
-                        answer.avatar = letterAvatar(answer.nickname, 60);
-                    }else{
-                        answer.avatar = letterAvatar(answer.account, 60);
-                    }
-
-                    if(answer.answerReplyList != null && answer.answerReplyList.length >0){
-                        for(let j:number=0; j<answer.answerReplyList.length; j++){
-                            let reply = answer.answerReplyList[j];
-                            if(reply.nickname != null && reply.nickname !=''){
-                                reply.avatar = letterAvatar(reply.nickname, 38);
-                            }else{
-                                reply.avatar = letterAvatar(reply.account, 38);
-                            }
-                        }
-                    }
-                    
-
-
-                    //回复
-                    if(answer.answerReplyList != null && answer.answerReplyList.length >0){
-                        for (let j = 0; j <answer.answerReplyList.length; j++) {
-                            let reply = answer.answerReplyList[j];
-                            Object.assign(state.editReplyFormView, {[reply.id] : false});
-                            
-                            Object.assign(state.editReplyContentField, {[reply.id] : reply.content});
-                            
-                        }
-                    }
-                    
-
-                    //处理图片放大标签
-                    let contentNode = document.createElement("div");
-                    contentNode.innerHTML = answer.content;
-                    bindNode(contentNode);
-                    answer.content = escapeVueHtml(contentNode.innerHTML);
-
+                    state.answerList.unshift(answer);
                 }
-                state.answerList.push.apply(state.answerList,data.records);
+                state.initialPage = state.initialPage-1; //初始页码
             }
 
 
+            state.isShowPage = true;//显示分页栏
 
-           
+
+            nextTick(()=>{
+                if(data.records != null && data.records.length > 0){
+                    for (let i = 0; i <data.records.length; i++) {
+                        let answer = data.records[i];
+                        let answerRefValue =  (proxy?.$refs['answerContent_'+answer.id] as any);
+                        if(answerRefValue != undefined){
+                            renderBindNode(answerRefValue[0]); 
+                        }
+                        
+                    }
+                }
+            })
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    //查询答案列表
+    const queryAnswerList = (questionId: string,answerId: string, replyId: string, page:number|undefined) => {
+        let params = {} as any;
+        params.questionId = questionId;
+        if(answerId != null && answerId != ''){
+            params.answerId = answerId;
+        }
+        if(page != undefined){
+            params.page = page;
+        }
+        
+        proxy?.$axios({
+            url: '/queryAnswerList',
+            method: 'get',
+            params:  params,
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+            showErrorMessage:false,// 是否显示错误提示
+        })
+        .then((response: AxiosResponse) => {
+            return response?.data
+        })
+        .then((data: PageView<Answer>) => {
+            state.isAnswerSkeleton = false;//关闭骨架屏
+
+            if(data.records != null && data.records.length >0){
+                processAnswerData(data);
+                state.answerList.push.apply(state.answerList,data.records);
+            }
+
             state.totalrecord = parseInt(data.totalrecord);//服务器返回的long类型已转为String类型
             state.currentpage = data.currentpage;
             state.totalpage = parseInt(data.totalpage);//服务器返回的long类型已转为String类型
             state.maxresult = data.maxresult;
 
             state.isShowPage = true;//显示分页栏
+
+            if(page == undefined){
+                state.initialPage = data.currentpage; //初始页码
+                
+                if(state.totalpage == data.currentpage){//如果是最后一页
+                    state.isFinished = true;
+                }
+            }
 
             if(state.totalpage == 0 || state.totalpage == page){//如果没有内容或是最后一页，则不再加载
                 state.isFinished = true;
@@ -820,6 +1013,44 @@
                         
                     }
                 }
+
+                //跳转到锚点
+                nextTick(()=>{
+                    //跳转到答案
+                    if(answerId != null && answerId != '' && (replyId == null || replyId == '')){
+
+                        let answerRef = (proxy?.$refs['answer_'+answerId] as any);
+                        if(answerRef !=undefined){
+                            let answerRefValue = answerRef[0];
+                            window.scrollTo(0,answerRefValue.getBoundingClientRect().top-40);
+
+                        }
+                    }
+                    //跳转到回复
+                    if(replyId != null && replyId != ''){
+                        if (state.answerList != null && state.answerList.length > 0) {
+                            for(var i=0;i<state.answerList.length; i++){
+                                var answer = state.answerList[i];
+                                if(answer.answerReplyList != null && answer.answerReplyList.length > 0){
+                                    for(var j=0;j<answer.answerReplyList.length; j++){
+                                        var reply = answer.answerReplyList[j];
+                                        if(reply.id==replyId && j >=state.viewNumber){//如果在收缩层
+                                            telescopicReply(answer.id);//展开
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        nextTick(()=>{
+                            let replyIdRef = (proxy?.$refs['replyData_'+replyId] as any);
+                            if(replyIdRef !=undefined){
+                                let replyIdRefValue = replyIdRef[0];
+                                window.scrollTo(0,replyIdRefValue.getBoundingClientRect().top-40);
+
+                            }
+                        })
+                    }
+                })
             })
         })
         .catch((error: any) =>{
@@ -827,6 +1058,58 @@
             state.isLoading = false;//加载状态结束
             console.log(error);
         });
+    }
+
+    //处理答案数据
+    const processAnswerData = (data: PageView<Answer>) => {
+        for(let i:number=0; i<data.records.length; i++){
+            let answer = data.records[i];
+            state.replyExpandOrShrink.set(answer.id, false); //是否展开
+            if(answer.nickname != null && answer.nickname !=''){
+                answer.avatar = letterAvatar(answer.nickname, 60);
+            }else{
+                answer.avatar = letterAvatar(answer.account, 60);
+            }
+
+            if(answer.answerReplyList != null && answer.answerReplyList.length >0){
+                for(let j:number=0; j<answer.answerReplyList.length; j++){
+                    let reply = answer.answerReplyList[j];
+                    if(reply.nickname != null && reply.nickname !=''){
+                        reply.avatar = letterAvatar(reply.nickname, 38);
+                    }else{
+                        reply.avatar = letterAvatar(reply.account, 38);
+                    }
+                    if(reply.friendUserName != null && reply.friendUserName != ''){
+                        if(reply.friendNickname != null && reply.friendNickname !=''){
+                            reply.friendAvatar = letterAvatar(reply.friendNickname, 22);
+                        }else{
+                            reply.friendAvatar = letterAvatar(reply.friendAccount, 22);
+                        }
+                    }
+                }
+            }
+            
+
+
+            //回复
+            if(answer.answerReplyList != null && answer.answerReplyList.length >0){
+                for (let j = 0; j <answer.answerReplyList.length; j++) {
+                    let reply = answer.answerReplyList[j];
+                    Object.assign(state.editReplyFormView, {[reply.id] : false});
+                    
+                    Object.assign(state.editReplyContentField, {[reply.id] : reply.content});
+                    
+                }
+            }
+            
+
+            //处理图片放大标签
+            let contentNode = document.createElement("div");
+            contentNode.innerHTML = answer.content;
+            bindNode(contentNode);
+            answer.content = escapeVueHtml(contentNode.innerHTML);
+
+        }
     }
 
     //递归绑定节点参数
@@ -859,7 +1142,7 @@
                     
                     }else{
                         //@click方法由RenderTemplate.vue调度处理
-                        html = '<van-image src="'+src+'" '+style+' lazy-load @click="onZoomPicture_renderTemplate(\''+src+'\')"></van-image>';
+                        html = '<van-image src="'+src+'" '+style+' lazy-load @click="onZoomPicture_renderTemplate(\''+src+'\')" @load="onLoadPicture_renderTemplate(\''+src+'\')"></van-image>';
                       
                        // html = '<img '+style+'  v-lazy="{src:\''+src+'\',error:\''+state.photo_error+'\'}" @click="onZoomPicture_renderTemplate(\''+src+'\')"/>';
                     
@@ -962,6 +1245,24 @@
         }
     }
 
+    //计算楼层
+    const calculateFloor = (answerId:string) => {
+        if(state.answerList != null && state.answerList.length >0){
+            for(let i:number=0; i<state.answerList.length; i++){
+                let answer = state.answerList[i];
+                
+                if(answer.id == answerId){
+                    if(state.initialPage >1){
+                        return (state.initialPage-1) * state.maxresult + i +1;
+                    }else{
+                        return i +1;
+                    }
+                }
+            }
+        }
+        return '';
+    }
+
     //放大图片
     const onZoomPicture = (imagePath:string) => {
         ImagePreview({
@@ -971,13 +1272,19 @@
             showIndex:false,//是否显示页码
         });
     }
+    //图片加载完成
+    const onLoadPicture = (imagePath:string) => {
+        
+    }
     //问题气泡弹出框菜单选项
     const onQuestionPopoverActions = (question:Question) => {
         let actions = new Array()
         if(state.question.userName == store_systemUser.value.userName){
             actions.push({ text: '追加', questionId:question.id});
         }
-
+        if(store_systemUser.value != null && Object.keys(store_systemUser.value).length >0){
+            actions.push({ text: '举报', questionId:question.id});
+        }
         return actions;
     }
     
@@ -988,12 +1295,18 @@
         if(action.text == '追加'){
             appendQuestionUI(action.questionId);
         }
+        if(action.text == '举报'){
+            addReportUI(action.questionId,40);
+        }
     }
     //清除答案列表
     const clearAnswerList = () => {
         state.answerList.length =0;
         state.editReplyContentField = {} as any;
+        state.addReplyFriendContentField = {} as any;
         state.isFinished = false; 
+        state.line.clear();//楼中楼的线  key:回复Id value:是否显示
+        state.dot.clear();//楼中楼的点  key:回复Id value:是否显示
 
         for (const [key, value] of Object.entries(state.editAnswerEditorMap)){
             if(value != null){
@@ -1014,7 +1327,7 @@
             }
 
             actions.push({ text: '回复', answerId:answer.id});
-            
+            actions.push({ text: '举报', answerId:answer.id});
             if(answer.userName ==  store_systemUser.value.userName){
                 actions.push({ text: '编辑',answer:answer});
                 actions.push({ text: '删除', answerId:answer.id});
@@ -1032,6 +1345,8 @@
         }else if(action.text == '回复'){
             //添加回复表单
             addReplyUI(action.answerId);
+        }else if(action.text == '举报'){
+            addReportUI(action.answerId,50);
         }else if(action.text == '编辑'){
             editAnswerUI(action.answer)
         }else if(action.text == '删除'){
@@ -1042,10 +1357,18 @@
      //回复气泡弹出框菜单选项
      const onReplyPopoverActions = (reply:AnswerReply) => {
         let actions = new Array()
-        if(store_systemUser.value != null && Object.keys(store_systemUser.value).length>0 && reply.userName ==  store_systemUser.value.userName){
-            actions.push({ text: '编辑', reply:reply});
-            actions.push({ text: '删除', replyId:reply.id});
+
+        if(store_systemUser.value != null && Object.keys(store_systemUser.value).length>0){
+            actions.push({ text: '回复', reply:reply});
+            if(reply.userName ==  store_systemUser.value.userName){
+                actions.push({ text: '编辑', reply:reply});
+            }
+            actions.push({ text: '举报', replyId:reply.id});
+            if(reply.userName ==  store_systemUser.value.userName){
+                actions.push({ text: '删除', replyId:reply.id});
+            }
         }
+        
         return actions;
     }
     
@@ -1053,8 +1376,11 @@
 
     //回复气泡弹出框选择
     const onReplyPopoverSelect = (action:any) => {
-        
-        if(action.text == '编辑'){
+        if(action.text == '回复'){
+            addReplyFriendUI(action.reply);
+        }else if(action.text == '举报'){
+            addReportUI(action.replyId,60);
+        }else if(action.text == '编辑'){
             editReplyUI(action.reply)
         }else if(action.text == '删除'){
             onDeleteReply(action.replyId);
@@ -2080,6 +2406,462 @@
         });
     }
 
+    //选择举报分类
+    const selectReportType = (reportTypeList: Array<ReportType>) => {
+        nextTick(()=>{
+            for(let i =0; i<reportTypeList.length; i++){
+                let reportType = reportTypeList[i];
+                if(reportType.id == state.reportTypeId && reportType.giveReason){
+                    state.show_giveReason = true;
+                    return;
+                }
+                
+                for(let j =0; j<reportType.childType.length; j++){
+                    let childReportType = reportType.childType[j];
+                    if(childReportType.id == state.reportTypeId && childReportType.giveReason){
+                        state.show_giveReason = true;
+                        return;
+                    }
+                }
+            }
+            
+            state.show_giveReason = false;   
+             
+        })
+    }
+    //上传图片前处理
+    const beforeRead = (file:any):boolean => {
+
+        if(state.reportMaxImageUpload >0  && state.fileList.length < state.reportMaxImageUpload){
+            return true;
+        }else{
+            Notify({ 
+                type: 'warning', 
+                message: '已达到最大图片允许上传数量',
+                onClose: ()=>{
+                    
+                } 
+            });
+        }
+        return false;
+    };
+    //举报表单
+    const addReportUI = (parameterId: string,module: number) => {
+        
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            return;
+        }
+        state.allowSubmit.set('report',true);//提交按钮disabled状态
+
+
+        //清空表单
+        state.reportTypeList.length = 0;
+        state.reportTypeId = '';//举报分类Id
+        state.reason = '';//理由
+        state.fileList.length = 0;
+        state.reportMaxImageUpload = 0;//图片允许最大上传数量
+        state.parameterId = '',//举报参数Id
+        state.module = 0,//举报模块
+        state.show_giveReason = false,//是否显示说明理由表单
+        
+        
+        state.showCaptcha.delete('report');//是否显示验证码
+        state.captchaKey.delete('report');//验证码key
+        Object.assign(state.captchaValue, {['report'] : ''});//验证码value
+
+        //清空所有错误
+        error.reportTypeId= "";//举报分类Id
+        error.reason= "";//理由
+        error.image = "";
+        error.report= "";
+        error.captchaValue.delete('report');
+
+
+
+
+
+        proxy?.$axios({
+            url: '/user/queryAddReport',
+            method: 'get',
+            params:  {
+            },
+            showLoading: true,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            let data =  response.data;
+            if(data.allowReport){
+                
+
+                state.parameterId = parameterId;//举报参数Id
+				state.module = module;//举报模块
+
+                state.reportTypeList = data.reportTypeList;
+                state.reportMaxImageUpload = data.reportMaxImageUpload;
+
+                if(state.reportTypeList != null && state.reportTypeList.length >0){
+                    state.addReportFormView = true;
+                }else{
+                    Notify({ 
+                        type: 'warning', 
+                        message: '举报分类没开启',
+                        onClose: ()=>{
+                            
+                        } 
+                    });
+                }
+
+                if (data.captchaKey != undefined && data.captchaKey != '') {
+                    state.showCaptcha.set('report',true)
+                    state.captchaKey.set('report',data.captchaKey)
+                    Object.assign(state.captchaValue, {['report'] : ''});
+                    replaceCaptcha('report');//刷新验证码
+                }
+
+                state.allowSubmit.set('report',false);//提交按钮disabled状态
+            }else{
+                Notify({ 
+                    type: 'warning', 
+                    message: '举报功能已关闭',
+                    onClose: ()=>{
+                        
+                    } 
+                });
+            }
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    //添加举报 -- 提交数据
+    const onAddReportFormSubmit = () => {
+        let _key =  "report";
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+       
+        const p1 = new Promise<void>((resolve, reject) => {
+            error.captchaValue.set(_key,'');
+            if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                    checkCaptchaValue(state.captchaValue[_key].trim(), (err:string)=>{
+                        if(err != undefined){
+                            error.captchaValue.set(_key,err);
+                            state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                        }else{
+                            resolve();
+                        }
+                    },_key) 
+                }else{
+                    error.captchaValue.set(_key,"验证码不能为空");
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                }
+            }else{
+                resolve();
+            }
+        });
+       
+        Promise.all([p1])
+            .then(() => {
+                //清空所有错误
+                error.captchaValue.delete(_key);
+
+                error.reportTypeId= "";//举报分类Id
+                error.reason= "";//理由
+                error.image = "";
+                error.report= "";
+
+                let formData = new FormData();
+                
+
+                formData.append("parameterId", state.parameterId);
+                formData.append("module", String(state.module));
+            
+                if(state.reportTypeId){
+                    formData.append("reportTypeId", state.reportTypeId);
+                }
+                
+                if(state.reason){
+                    formData.append("reason", state.reason);
+                }
+
+                //图片
+                for(var i=0; i<state.fileList.length; i++){
+                    var fileData = state.fileList[i];
+                    formData.append("imageFile", fileData.file);
+                }
+                
+                if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+                    //验证码Key
+                    formData.append('captchaKey', state.captchaKey.get(_key) as string);
+                }
+                
+                //验证码值
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                     formData.append('captchaValue', (state.captchaValue[_key] as string).trim());
+                }
+                
+                proxy?.$axios({
+                    url: '/user/control/report/add',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+                        const result: any = response.data;
+                    
+                        if(JSON.parse(result.success)){
+                            Notify({ 
+                                type: 'success', 
+                                message: '提交成功',
+                                onClose: ()=>{
+                                    
+                                } 
+                            });
+
+
+                           
+                            state.addReportFormView = false;
+
+
+                            //重置表单
+                            //formAddCommentRef.value?.resetFields();
+                            if(state.showCaptcha.get(_key) == true){
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                            }
+
+                        }else{
+                            //处理错误信息
+                            for (const [key, value] of Object.entries(result.error) as [string, string][]){
+                                if(key == 'reportTypeId'){
+                                    error.reportTypeId = value;
+                                }else if(key == 'reason'){
+                                    error.reason = value;
+                                }else if(key == 'image'){
+                                    error.image = value;
+                                }else if(key == 'report'){
+                                    error.report = value;
+                                }else if(key == 'captchaValue'){
+                                    error.captchaValue.set(_key,value);
+                                }
+
+                            }
+
+                            if(result.captchaKey != null){
+                                state.showCaptcha.set(_key,true);
+                                state.captchaKey.set(_key,result.captchaKey);
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                                replaceCaptcha(_key);
+                            }else{
+                                state.showCaptcha.set(_key,false);
+                            }
+
+                            
+                        }
+                        state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+
+    }
+
+     //添加回复对方表单
+     const addReplyFriendUI = (reply:AnswerReply) => {
+        let _key =  "addReplyFriend-"+reply.id;
+        if(state.addReplyFriendFormView[reply.id] == true){//如果已打开
+			return;
+		} 
+        if(store_systemUser.value == null || Object.keys(store_systemUser.value).length==0){
+            return;
+        }
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+       
+
+        proxy?.$axios({
+            url: '/user/queryAddAnswerReply',
+            method: 'get',
+            params:  {
+                answerId: reply.answerId
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                let data =  response.data;
+                if(data.allowReply){
+                    Object.assign(state.addReplyFriendFormView, {[reply.id] : true});
+
+                    //对方用户
+                    let friendUser = '';
+                    if(reply.nickname != null && reply.nickname != ''){
+                        friendUser = reply.nickname;
+                    }
+                    if(reply.nickname == null || reply.nickname == ''){
+                        friendUser = reply.account;
+                    }
+                    state.friendUser = friendUser;
+
+
+
+                    if (data.captchaKey != undefined && data.captchaKey != '') {
+                        
+                        state.showCaptcha.set(_key,true)
+                        state.captchaKey.set(_key,data.captchaKey)
+                        Object.assign(state.captchaValue, {[_key] : ''});
+                        replaceCaptcha(_key);//刷新验证码
+                    }
+
+                    state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                }else{
+                    Notify({ 
+                        type: 'warning', 
+                        message: '不允许添加回复',
+                        onClose: ()=>{
+                            
+                        } 
+                    });
+                }
+            }
+            
+        })
+        .catch((error: any) =>{
+            console.log(error);
+        });
+    }
+
+    //添加回复对方 -- 提交数据
+    const onAddReplyFriend = (answerId:string,replyId:string) => {
+        let _key =  "addReplyFriend-"+replyId;
+        state.allowSubmit.set(_key,true);//提交按钮disabled状态
+
+        const p1 = new Promise<void>((resolve, reject) => {
+            error.captchaValue.set(_key,'');
+            if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                    checkCaptchaValue(state.captchaValue[_key].trim(), (err:string)=>{
+                        if(err != undefined){
+                            error.captchaValue.set(_key,err);
+                            state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                        }else{
+                            resolve();
+                        }
+                    },_key) 
+                }else{
+                    error.captchaValue.set(_key,"验证码不能为空");
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                }
+            }else{
+                resolve();
+            }
+        });
+
+        Promise.all([p1])
+            .then(() => {
+                //清空所有错误
+                error.replyContent.delete(_key);
+                error.captchaValue.delete(_key);
+                error.reply.delete(_key);
+
+                let formData = new FormData();
+                formData.append('answerId',  answerId); 
+
+                formData.append('friendReplyId',  replyId); 
+
+                if(state.addReplyFriendContentField[replyId]){
+                    formData.append('content', state.addReplyFriendContentField[replyId]); 
+                }
+                
+                if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
+                    //验证码Key
+                    formData.append('captchaKey', state.captchaKey.get(_key) as string);
+                }
+                
+                //验证码值
+                if(state.captchaValue[_key] != undefined && state.captchaValue[_key] != null && state.captchaValue[_key] != ''){
+                     formData.append('captchaValue', (state.captchaValue[_key] as string).trim());
+                }
+
+                proxy?.$axios({
+                    url: '/user/control/answer/addAnswerReply',
+                    method: 'post',
+                    data: formData
+                })
+                .then((response: AxiosResponse) => {
+                    if(response){
+
+                        const result: any = response.data;
+                    
+                        if(JSON.parse(result.success)){
+                            Notify({ 
+                                type: 'success', 
+                                message: '提交成功',
+                                onClose: ()=>{
+                                    
+                                } 
+                            });
+                           
+                            state.addReplyFriendContentField[replyId] = "";//清空
+
+                            Object.assign(state.addReplyFriendFormView, {[replyId] : false});
+
+
+                            //重置表单
+                            //formAddCommentRef.value?.resetFields();
+                            if(state.showCaptcha.get(_key) == true){
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                            }
+
+                            //清除答案列表
+                            clearAnswerList();
+
+                            state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
+                            queryAnswerList(state.questionId,'','',1);
+
+                        }else{
+                            //处理错误信息
+                            for (const [key, value] of Object.entries(result.error) as [string, string][]){
+                                if(key == 'content'){
+                                    error.replyContent.set(_key,value);
+                                }else if(key == 'reply'){
+                                    error.reply.set(_key,value);
+                                }else if(key == 'friendReplyId'){
+                                    error.reply.set(_key,value);
+                                }else if(key == 'captchaValue'){
+                                    error.captchaValue.set(_key,value);
+                                }
+                            }
+
+                            if(result.captchaKey != null){
+                                state.showCaptcha.set(_key,true);
+                                state.captchaKey.set(_key,result.captchaKey);
+                                Object.assign(state.captchaValue, {[_key] : ''});
+                                replaceCaptcha(_key);
+                            }else{
+                                state.showCaptcha.set(_key,false);
+                            }
+
+                            
+                        }
+                        state.allowSubmit.set(_key,false);;//提交按钮disabled状态
+                    }
+                })
+                .catch((error: any) =>{
+                    console.log(error);
+                    state.allowSubmit.set(_key,false);//提交按钮disabled状态
+                });
+            }).catch(() => {
+                console.log("提交数据错误");
+            });
+    }
+
     //添加回复表单
     const addReplyUI = (answerId:string) => {
         let _key =  "addReply-"+answerId;
@@ -2486,6 +3268,9 @@
                         delete state.editReplyFormView[replyId];
                         delete state.editReplyContentField[replyId];
 
+                        state.friendUser = '';
+                        delete state.addReplyFriendFormView[replyId];
+                        delete state.addReplyFriendContentField[replyId];
 
                         //重置表单
                         //formAddCommentRef.value?.resetFields();
@@ -2606,6 +3391,154 @@
             console.log(error);
         });
     }
+
+
+    //点击回复层级
+    const clickReplyLevel = (answerId:string,replyId:string) => {
+       
+        //是否点击已选中的项
+        let isSelectedItem = false;
+
+
+        if(state.dot.size >0){
+            let lastFriendReplyId = [...state.dot][state.dot.size-1];//最后一个元素
+            if(lastFriendReplyId[0] == replyId){
+                isSelectedItem = true;
+            }
+        }
+
+        state.dot.clear();
+        state.line.clear();
+        if(!isSelectedItem){
+            showReplyLevel(answerId,replyId);
+        }
+       
+    }
+
+    //展示回复层级
+    const showReplyLevel = (answerId:string,replyId:string) => {
+
+        let dotArray = new Array();
+        let replyList = [] as Array<AnswerReply>;
+        if(state.answerList != null && state.answerList.length > 0){
+            A:for (let i = 0; i <state.answerList.length; i++) {
+                let answer = state.answerList[i];
+                
+                if(answer.id == answerId){
+                    //回复
+                    if(answer.answerReplyList != null && answer.answerReplyList.length >0){
+                        replyList = answer.answerReplyList;
+                        for (let j = 0; j <answer.answerReplyList.length; j++) {
+                            let reply = answer.answerReplyList[j];
+                            if(reply.id == replyId && reply.friendUserName != null && reply.friendUserName != ''){
+                                let friendReplyIdArray = reply.friendReplyIdGroup.split(",");
+                                for (let k = 0; k <friendReplyIdArray.length; k++) {
+                                    let friendReplyId = friendReplyIdArray[k];
+                                    if(friendReplyId != '' && friendReplyId != '0'){
+                                        dotArray.push(friendReplyId);
+                                    }
+                                }
+                                break A;
+                            }
+                        }
+                    }
+                }                       
+                
+            }
+        }
+
+        //第一个有效层级
+        let firstLevel = '';
+
+        A:for (let i = 0; i <dotArray.length; i++) {
+            let friendReplyId = dotArray[i];
+            for (let j = 0; j <replyList.length; j++) {
+                let reply = replyList[j];
+                if(reply.id == friendReplyId){
+                    firstLevel = friendReplyId;
+                    break A;
+                }
+            }
+        }
+
+        //过滤无效的点
+        A:for (let i = dotArray.length - 1; i >= 0; i--) {
+            let friendReplyId = dotArray[i];
+            for (let j = 0; j <replyList.length; j++) {
+                let reply = replyList[j];
+                if(reply.id == friendReplyId){
+                    continue A;
+                }
+            }
+            dotArray.splice(i, 1);
+        }
+
+        if(dotArray.length >0){
+            for (let i = 0; i <dotArray.length; i++) {
+                let friendReplyId = dotArray[i];
+                state.dot.set(friendReplyId,true);//楼中楼的点
+            }
+            for (let i = 0; i <replyList.length; i++) {
+                let reply = replyList[i];
+                if(reply.id == firstLevel){
+                    state.line.set(reply.id,true);//楼中楼的线
+                    continue;
+                }
+                if(reply.id == replyId){
+                    break;
+                }
+                if(state.line.size >0){
+                    state.line.set(reply.id,true);//楼中楼的线
+                }
+            }
+
+            state.dot.set(replyId,true);//楼中楼点击的层
+        }
+    }
+
+    //判断是否有弹窗
+    const isPopupWindow = () => {
+        let isPopup = false;//是否有弹窗
+
+        if(state.appendQuestionFormView){//追加问题弹窗
+            isPopup = true;
+        }
+
+        if(state.popup_addAnswer){//添加答案弹窗
+            isPopup = true;
+        }
+        //修改答案弹窗
+        for(let editAnswerForm in state.editAnswerFormView){
+            if(state.editAnswerFormView[editAnswerForm]){
+                isPopup = true;
+            }
+        }
+        //回复弹窗
+        for(let addReplyForm in state.addReplyFormView){
+            if(state.addReplyFormView[addReplyForm]){
+                isPopup = true;
+            }
+        }
+        //修改回复弹窗
+        for(let editReplyForm in state.editReplyFormView){
+            if(state.editReplyFormView[editReplyForm]){
+                isPopup = true;
+            }
+        }
+
+         //回复对方弹窗
+         for(let addReplyFriendForm in state.addReplyFriendFormView){
+            if(state.addReplyFriendFormView[addReplyFriendForm]){
+                isPopup = true;
+            }
+        }
+
+        //添加举报弹窗
+        if(state.addReportFormView){
+            isPopup = true;
+        }
+        return isPopup;
+    }
    
     //导航守卫
     onBeforeRouteUpdate((to, from, next) => {
@@ -2615,16 +3548,31 @@
             }
             //删除缓存
             store.setCacheNumber(to.name)
+
         }
-        next();
+        //如果有弹出层，则不离开当前路由
+        if(isPopupWindow()){
+            store.setPopUpWindow(true);//标记有弹出窗口
+            next(false);
+        }else{
+            next();
+        }
     });
+
+    //离开当前路由（解决有弹窗按返回键时会返回上一页）
+    onBeforeRouteLeave((to, from) => { 
+        //如果有弹出层，则不离开当前路由
+        if(isPopupWindow()){
+            store.setPopUpWindow(true);//标记有弹出窗口
+            return false;
+        }
+    })
 
 
 
     onMounted(() => {
         state.questionId = router.currentRoute.value.query.questionId != undefined ?router.currentRoute.value.query.questionId as string :'';
         init();
-
         //设置缓存
         store.setCacheComponents(String(router.currentRoute.value.name))
     }) 
@@ -2756,6 +3704,7 @@
         margin-top: 8px;
         background: #fff;
         border-radius: var(--van-border-radius-lg);
+        position: relative;
         .head{
             
             .titleBox{
@@ -2815,6 +3764,10 @@
                         .icon{
                             position: relative;
                             top: 2px;
+                        }
+                        .ipAddress{
+                            margin-left: 2px;
+                            margin-right: 12px;
                         }
                         .answerTotal{
                             margin-left: 2px;
@@ -3083,7 +4036,17 @@
                 border-left: 5px solid #85eb4e;
             }
         }
-            
+        //举报标记
+        :deep(.reportMark){
+            &:before{
+                content: " ";
+                position: absolute;
+                top: 0px;
+                left: -8px;
+                bottom:0px;
+                border-left: 5px solid #f89898;
+            }
+        }    
         .operating {
             display:inline-block;
             text-align: center;
@@ -3145,6 +4108,12 @@
             line-height: 42px;
             border-radius: var(--van-border-radius-lg);
         }
+    }
+    .previous-answer-wrap{
+        margin-top: 8px;
+        background: #fff;
+        padding: 12px;
+        border-radius: var(--van-border-radius-lg);
     }
     .answerList{
         margin-top: 8px;
@@ -3208,7 +4177,7 @@
 
             .top-container{
                 .right-layout{
-                    .more{
+                    .active-more{
                         position: relative;
                         top: 1px;
                         width: 55px;
@@ -3302,6 +4271,10 @@
                             color: var(--van-gray-6);
                             font-size: 12px;
                             margin-top: 3px;
+                            .separate{
+                                margin-left: 6px;
+                                margin-right: 6px;
+                            }
                         }
                     }
                     
@@ -3433,126 +4406,216 @@
                         z-index: 1;
                     }
                     .reply-container{
-                        padding-top: 12px;
-                        padding-bottom: 12px;
-                        .top-container{
-                            display: flex;
-                            .left-layout{
-                                .avatarImg{
-                                    img {
-                                        width: 32px;
-                                        height: 32px;
-                                        border-radius:32px;
-                                        vertical-align: middle;
+                        position: relative;
+                        left: -30px;
+                       
+                        .replyItem{
+                            padding-top: 12px;
+                            padding-bottom: 12px;
+                            margin-left: 30px;
+                            margin-right:-30px;
+                            //举报标记
+                            .reply-reportMark{
+                                position: relative;
+                                &:before{
+                                    content: " ";
+                                    position: absolute;
+                                    top: -10px;
+                                    left: -18px;
+                                    bottom:-5px;
+                                    border-left: 5px solid #f89898;
+                                }
+                            }
+                            .top-container{
+                                display: flex;
+                                .left-layout{
+                                    .avatarImg{
+                                        img {
+                                            width: 32px;
+                                            height: 32px;
+                                            border-radius:32px;
+                                            vertical-align: middle;
+                                        }
+                                    }
+                                }
+                                .middle-layout{
+                                    flex: 1;
+                                    margin-left: 10px;
+                                    margin-right: 10px;
+                                    .userInfo{
+                                        display: flex; 
+                                        align-items: center;
+                                        flex-wrap: wrap;
+                                        min-height: 39px;
+                                        .cancelAccount{
+                                            display: inline-block;
+                                            vertical-align: middle;
+                                            padding: 4px 4px;
+                                            font-size: 12px;
+                                            line-height: 12px;
+                                            -webkit-border-radius: 2px;
+                                            -moz-border-radius: 2px;
+                                            border-radius: 2px;
+                                            color: var(--van-gray-5);
+                                            background-color: var(--van-gray-1);
+                                            position: relative;
+                                            left: -5px;
+                                            margin-top: 2px;
+                                            margin-bottom: 2px;
+                                        }
+                                        .account{
+                                            color: var(--van-gray-7);
+                                            margin-right: 5px;
+                                            position: relative;
+                                            top: -3px;
+                                        }  
+                                        .userRoleName{
+                                            display: inline-block;
+                                            white-space:nowrap;
+                                            vertical-align: middle;
+                                            padding: 2px 4px;
+                                            margin-right: 5px;
+                                            margin-bottom: 5px;
+                                            font-size: 12px;
+                                            line-height: 12px;
+                                            -webkit-border-radius: 2px;
+                                            -moz-border-radius: 2px;
+                                            border-radius: 2px;
+                                            color:#e2b46e;
+                                            background-color:#f8e7c4;
+                                            position: relative;
+                                            top: -1px;
+                                        }
+                                        .staff{
+                                            display: inline-block;
+                                            white-space:nowrap;
+                                            vertical-align: middle;
+                                            padding: 2px 4px;
+                                            margin-right: 5px;
+                                            margin-bottom: 5px;
+                                            font-size: 12px;
+                                            line-height: 12px;
+                                            -webkit-border-radius: 2px;
+                                            -moz-border-radius: 2px;
+                                            border-radius: 2px;
+                                            color:#4CD263;
+                                            background-color:#cafcc7;
+                                            position: relative;
+                                            top: -1px;
+                                        }
+                                        .time{
+                                            width:100%;
+                                            color: var(--van-gray-6);
+                                            font-size: 12px;
+                                            position: relative;
+                                            top: -4px;
+                                            .separate{
+                                                margin-left: 6px;
+                                                margin-right: 6px;
+                                            }
+                                        }
+                                    }
+                                    
+                                }
+                                .right-layout{
+                                    display: flex;
+                                    .more{
+                                        color: var(--van-gray-6);
+                                        position: relative;
+                                        top: 1px;
                                     }
                                 }
                             }
-                            .middle-layout{
-                                flex: 1;
-                                margin-left: 10px;
-                                margin-right: 10px;
-                                .userInfo{
-                                    display: flex; 
-                                    align-items: center;
-                                    flex-wrap: wrap;
+                            .bottom-container{
+                                .friendInfo-wrap{
+                                    margin-top: 6px;
+                                    background: #fff;
+                                    padding: 6px 0px;
+                                    border-radius: var(--van-border-radius-lg);
+                                
+                                    .friendInfo{
+                                        background: var(--van-gray-1);
+                                        color: var(--van-gray-6);
+                                        line-height: 38px;
+                                        border-radius: var(--van-border-radius-lg);
+                                        display: flex;
+
+                                        .icon-container{
+                                            margin-left: 12px;
+                                            position: relative;
+                                            top: 1px;
+                                            color: var(--van-gray-6);
+                                        }
+                                        .avatarImg-container{
+                                            margin-left: 12px;
+                                            position: relative;
+                                            top: -1px;
+                                            img {
+                                                width: 22px;
+                                                height: 22px;
+                                                border-radius:22px;
+                                                vertical-align: middle;
+                                            }
+                                        }
+                                        .nameInfo-container {
+                                            flex: 1;
+                                            margin-left: 6px;
+                                            margin-right: 6px;
+                                            overflow:hidden;
+                                            text-overflow:ellipsis; //溢出用省略号显示
+                                            white-space:nowrap; //溢出不换行
+                                            .userName {
+                                                color: var(--van-gray-6);
+                                                font-size: 14px;
+                                                position: relative;
+                                                top: 1px;
+                                            }
+                                            .cancelNickname{
+                                                font-weight:normal;
+                                                margin-right: 3px;
+                                                color: transparent;
+                                                text-shadow: 0 0 5px rgba(0,0,0,0.4);
+                                                zoom: 1;
+                                                user-select:none;
+                                            }
+                                        }
+                                    }
+                                }
+                                .replyContent{
+                                    font-size: 15px;
+                                    line-height:26px;
+                                    color:var(--van-gray-8);
+                                    margin-top: 8px;
+                                    padding-top: 8px;
+                                    padding-bottom: 8px;
+                                    word-break:break-all;
                                     .cancelAccount{
                                         display: inline-block;
                                         vertical-align: middle;
-                                        padding: 4px 4px;
-                                        font-size: 12px;
-                                        line-height: 12px;
+                                        padding: 6px 6px;
+                                        font-size: 14px;
+                                        line-height: 14px;
                                         -webkit-border-radius: 2px;
                                         -moz-border-radius: 2px;
                                         border-radius: 2px;
                                         color: var(--van-gray-5);
-                                        background-color: var(--van-gray-1);
-                                        position: relative;
-                                        left: -5px;
-                                        margin-top: 2px;
-                                        margin-bottom: 2px;
+                                        background-color:  var(--van-gray-1);
                                     }
-                                    .account{
-                                        color: var(--van-gray-7);
-                                        margin-right: 5px;
-                                        position: relative;
-                                        top: -3px;
-                                    }  
-                                    .userRoleName{
-                                        display: inline-block;
-                                        white-space:nowrap;
-                                        vertical-align: middle;
-                                        padding: 2px 4px;
-                                        margin-right: 5px;
-                                        margin-bottom: 5px;
-                                        font-size: 12px;
-                                        line-height: 12px;
-                                        -webkit-border-radius: 2px;
-                                        -moz-border-radius: 2px;
-                                        border-radius: 2px;
-                                        color:#e2b46e;
-                                        background-color:#f8e7c4;
-                                        position: relative;
-                                        top: -1px;
-                                    }
-                                    .staff{
-                                        display: inline-block;
-                                        white-space:nowrap;
-                                        vertical-align: middle;
-                                        padding: 2px 4px;
-                                        margin-right: 5px;
-                                        margin-bottom: 5px;
-                                        font-size: 12px;
-                                        line-height: 12px;
-                                        -webkit-border-radius: 2px;
-                                        -moz-border-radius: 2px;
-                                        border-radius: 2px;
-                                        color:#4CD263;
-                                        background-color:#cafcc7;
-                                        position: relative;
-                                        top: -1px;
-                                    }
-                                    .time{
-                                        width:100%;
-                                        color: var(--van-gray-6);
-                                        font-size: 12px;
-                                        position: relative;
-                                        top: -2px;
-                                    }
-                                }
-                                
-                            }
-                            .right-layout{
-                                display: flex;
-                                .more{
-                                    color: var(--van-gray-6);
-                                    position: relative;
-                                    top: 1px;
                                 }
                             }
                         }
-                        .bottom-container{
-                           
-                            .replyContent{
-                                font-size: 15px;
-                                line-height:26px;
-                                color:var(--van-gray-8);
-                                margin-top: 8px;
-                                padding-top: 8px;
-                                padding-bottom: 8px;
-                                word-break:break-all;
-                                .cancelAccount{
-                                    display: inline-block;
-                                    vertical-align: middle;
-                                    padding: 6px 6px;
-                                    font-size: 14px;
-                                    line-height: 14px;
-                                    -webkit-border-radius: 2px;
-                                    -moz-border-radius: 2px;
-                                    border-radius: 2px;
-                                    color: var(--van-gray-5);
-                                    background-color:  var(--van-gray-1);
-                                }
-                            }
+                    }
+                    //第一项时间线并且含有回复对方的节点位置
+                    :deep(.first-position){
+                        .tail {
+                            top: 133px;
+                        }
+                       
+                    }
+                    //含有回复对方的节点位置
+                    :deep(.node-position){
+                        .node {
+                            top: 133px;
                         }
                     }
                     .link {
@@ -3564,6 +4627,18 @@
                         }
                     }
                 }
+            }
+        }
+        //举报标记
+        .reportMark{
+            position:relative;
+            &:before{
+                content: " ";
+                position: absolute;
+                top: 0px;
+                left: -18px;
+                bottom:0px;
+                border-left: 5px solid #f89898;
             }
         }
     }
@@ -3634,6 +4709,46 @@
             margin: 16px 0px;
         }
         
+    }
+}
+//回复对方
+.addReplyFriendModule{
+    overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+	height: 100%; 
+
+    margin: 16px 0px 8px 0px;
+    .friendUser{
+        &:after{
+            border-bottom: 1px solid transparent;
+        }
+    }
+    .replyContent-item{
+        :deep(.van-field__control){
+            padding: 10px;
+            background-color: var(--van-gray-1);
+            overflow:hidden;//让输入框触摸可以滑动
+        }
+        
+        &:after{
+            border-bottom: 1px solid transparent;
+        }
+    }
+    .captcha-item{
+        :deep(.van-field__control){
+            background-color: var(--van-gray-1);
+        }
+        :deep(.van-field__control){
+            padding: 10px;
+            border-radius: 3px;
+        }
+        &:after{
+            border-bottom: 1px solid transparent;
+        }
+    }
+    .submitButton{
+        width: 100%;
+        margin: 16px 0px;
     }
 }
 .addReplyModule{
@@ -3766,5 +4881,73 @@
         }
     }
 }
-
+/* 添加举报 */
+.addReportModule{
+	overflow-y:auto;
+	-webkit-overflow-scrolling: touch;
+	height: 100%;
+    margin-top:10px;
+    .form-container{
+        .van-cell {
+            padding: 0px var(--van-cell-horizontal-padding) var(--van-cell-vertical-padding) var(--van-cell-horizontal-padding);
+        
+            &:after {
+                border-bottom: 1px solid transparent;
+            }
+        }
+        [class*=van-hairline]:after{
+            border-bottom: 1px solid transparent;
+        }
+        .fileList{
+            margin-left: 16px;
+            margin-right: 16px;
+        }
+        .submitButton{
+            width: 100%;
+            margin: 16px 0px;
+        }
+        
+    }
+    .reportType-container{
+        display: flex;
+        flex-direction: column;
+        padding-top: 20px;
+        .reportType-group{
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 15px;
+            .reportType-name{
+                margin-bottom: 15px;
+                font-size: 14px;
+                text-align: left;
+                color: #86909C;
+            }
+            .reportType-list{
+                display: flex;
+                flex-wrap: wrap;
+                padding: 0;
+                margin: 0;
+                list-style: none;
+                white-space: nowrap;
+                
+                .reportType-item{
+                    display: flex;
+                    flex-wrap: wrap;
+                    padding: 0;
+                    margin: 0;
+                    margin-right:30px;
+                    list-style: none;
+                    white-space: nowrap;
+                }
+                
+            }
+            .reportType-list-multiple{
+                margin-top: -15px;
+                .reportType-item-multiple{
+                    margin-top: 15px;
+                }
+            }
+        }
+    }
+}
 </style>

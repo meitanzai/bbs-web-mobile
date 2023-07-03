@@ -4,7 +4,7 @@
         <div class="main-container">
             <!-- 占位播放器 -->
             <div ref ="placeholderVideo" style="width: 0px;height: 0px;"></div>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" :disabled="updateAvatarVisible" @refresh="onRefresh" style="min-height: 50vh;">
                 
                 <div class="homeModule">
                     <div class="homeHeader" v-if="state.user != null && Object.keys(state.user).length>0">
@@ -16,7 +16,10 @@
                             <p class="nickname" v-if="state.user.nickname != null && state.user.nickname != ''">{{state.user.nickname}}</p>
                             <p class="grade" v-if="state.user.gradeName != null">{{state.user.gradeName}}</p>
                             
-                            
+                            <p class="ipAddress" v-if="state.user.ipAddress != null && state.user.ipAddress != ''">
+                                <Icon name="map-pin-line" :size="convertViewportWidth('14px')" class="icon"/>
+                                <span class="ipAddressText">{{state.user.ipAddress}}</span>
+                            </p>
                             
                             <span class="privateMessageBox" v-if="state.user.userName != null && state.user.userName != store_systemUser.userName ">
                                 <div class="followButton" @click="addFollow(state.user.userName)">{{state.followText}}</div>
@@ -81,7 +84,13 @@
                     </van-popup>
 
 
-                    <van-empty v-if="state.user == null || Object.keys(state.user).length==0" description="用户信息不存在或已隐藏"/>
+                    <div v-if="!state.isHomeFinished && (state.user == null || Object.keys(state.user).length==0)">
+                        <van-skeleton :row="3" class="skeleton"/>
+                    </div>
+                    <van-empty v-if="state.isHomeFinished && (state.user == null || Object.keys(state.user).length==0)" description="用户信息不存在或已隐藏"/>
+                    
+                    
+                    
                     <div v-if="state.user != null && Object.keys(state.user).length>0 && state.user.userName == store_systemUser.userName" class="homeMenu" >
                         <van-grid>
 
@@ -168,6 +177,10 @@
                                 <Icon name="realNameAuthentication" :size="convertViewportWidth('26px')" class="van-badge__wrapper van-icon van-grid-item__icon"/>
                                 <span class="van-grid-item__text">绑定手机</span>
                             </van-grid-item>
+                            <van-grid-item to="/user/control/reportList">
+                                <Icon name="error-warning-line" :size="convertViewportWidth('26px')" class="van-badge__wrapper van-icon van-grid-item__icon"/>
+                                <span class="van-grid-item__text">举报</span>
+                            </van-grid-item>
                             <van-grid-item to="/user/control/point">
                                 <Icon name="point" :size="convertViewportWidth('26px')" class="van-badge__wrapper van-icon van-grid-item__icon"/>
                                 <span class="van-grid-item__text">积分记录</span>
@@ -176,7 +189,6 @@
                                 <Icon name="login" :size="convertViewportWidth('26px')" class="van-badge__wrapper van-icon van-grid-item__icon"/>
                                 <span class="van-grid-item__text">登录日志</span>
                             </van-grid-item>
-                            <van-grid-item text="" />
                             <van-grid-item text="" />
                             <van-grid-item text="" />
                         </van-grid>
@@ -403,6 +415,7 @@
     import Hls from 'hls.js';
     import DPlayer from 'dplayer';
     import Long from "long";
+    import { nativeQueryVideoRedirect, nativeRefreshToken } from '@/utils/http';
 
     const store = useStore(pinia);
     const {title:store_title,keywords:store_keywords,description:store_description,systemUser:store_systemUser,userInfoVersion:store_userInfoVersion,cacheComponents:store_cacheComponents} = storeToRefs(store)
@@ -468,11 +481,13 @@
         likeCount: new Map<string,string>,//点赞数量 key:模块+id  例如话题点赞topic_topicId  
     
 
-        isError:false,//是否列表数据加载失败
-        isLoading:false,//是否处于加载中状态
-        isFinished:false,//是否加载完毕
-        isSkeleton:true,//是否显示骨架屏
-        isShowPage:false,//是否显示分页
+        isError:false,//动态是否列表数据加载失败
+        isLoading:false,//动态是否处于加载中状态
+        isFinished:false,//动态是否加载完毕
+        isSkeleton:true,//动态是否显示骨架屏
+        isShowPage:false,//动态是否显示分页
+
+        isHomeFinished:false,//用户中心是否加载完毕
     });
 
     //错误
@@ -675,6 +690,7 @@
             loadingMask:false,// 是否显示遮罩层
         })
         .then((response: AxiosResponse) => {
+            
             if(response){
                 const result: any = response.data;
                 if(result.user != null){
@@ -685,6 +701,8 @@
                     }		
 
                     callback();
+                }else{
+                    state.isHomeFinished = true;
                 }
             }
         }).catch((error: any) =>{
@@ -1165,6 +1183,38 @@
                                     hls = new Hls();
                                     hls.loadSource(video.src);
                                     hls.attachMedia(video);
+                                    hls.config.xhrSetup = (xhr, url) => {
+                                        
+                                        if(url.startsWith(store.apiUrl+"videoRedirect?")){//如果访问视频重定向页
+                                            //如果使用重定向跳转时会自动将标头Authorization发送到seaweedfs，seaweedfs会报501错误 A header you provided implies functionality that is not implemented
+                                            //这里发送X-Requested-With标头到后端，让后端返回需要跳转的地址
+                                            let videoRedirectDate = {} as any;
+                                            nativeQueryVideoRedirect(url,function(date:any){
+                                                if(store.systemUser != null && Object.keys(store.systemUser).length>0 && date.isLogin == false && date.isPermission == false){
+                                                    //会话续期
+                                                    nativeRefreshToken();
+                                                    nativeQueryVideoRedirect(url,function(date:any){
+                                                        videoRedirectDate = date;
+                                                    });
+                                                }else{
+                                                    videoRedirectDate = date;
+                                                }
+                                                
+                                            });
+
+                                            if(videoRedirectDate != null && Object.keys(videoRedirectDate).length>0 && videoRedirectDate.redirect != ''){
+                                                //告诉hls重新发送ts请求
+                                                xhr.open("GET", videoRedirectDate.redirect, true);//用重定向后的地址请求
+                                               // xhr.setRequestHeader("X-Requested-With", 'XMLHttpRequest');
+                                            }
+                                        }else{
+                                            // 请求ts的url 添加参数 props.fileid
+                                            //url = url + "?t=" + props.fileid;
+                                            // 这一步必须 告诉hls重新发送ts请求
+                                            xhr.open("GET", url, true);
+                                            //xhr.setRequestHeader("X-Requested-With", 'XMLHttpRequest');
+                                        }
+                                    };
                                 },
                             },
                         }
@@ -1416,6 +1466,7 @@
             padding-left:100px;
             padding-top:15px;
             font-size:12px;
+            padding-bottom: 46px;
             color:#fff;
             user-select:none;
             line-height:30px; 
@@ -1473,6 +1524,19 @@
                 text-align:center;
                 padding-left: 10px;
                 padding-right: 10px;
+            }
+            .ipAddress{
+                line-height:20px;
+                margin:5px 0; 
+                font-weight:normal;
+                .icon{
+                    position: relative;
+                    top: 2px;
+                    margin-right: 3px;
+                }
+                .ipAddressText{
+                    font-size:14px;
+                }
             }
         }
         .setting{
@@ -1567,6 +1631,9 @@
             top: 2px;
             right: 4px;
         }
+    }
+    .skeleton{
+        margin-top: 16px;
     }
     .homeMenu{
         margin-top:33px; 

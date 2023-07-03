@@ -35,7 +35,7 @@
             <!-- 占位播放器 -->
             <div ref ="placeholderVideo" style="width: 0px;height: 0px;"></div>
 
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="indexModule" >
                     <van-list v-model:loading="state.isLoading" :finished="state.isFinished" v-model:error="state.isError" error-text="请求失败，点击重新加载" finished-text="没有更多了" @load="onLoad">
                     
@@ -195,6 +195,7 @@
     import Hls from 'hls.js';
     import DPlayer from 'dplayer';
     import { getPageBasePath } from '@/utils/tool';
+    import { nativeQueryVideoRedirect, nativeRefreshToken } from '@/utils/http';
 
     
     const store = useStore(pinia);
@@ -456,6 +457,38 @@
                                 hls = new Hls();
                                 hls.loadSource(video.src);
                                 hls.attachMedia(video);
+                                hls.config.xhrSetup = (xhr, url) => {
+                                    
+                                    if(url.startsWith(store.apiUrl+"videoRedirect?")){//如果访问视频重定向页
+                                        //如果使用重定向跳转时会自动将标头Authorization发送到seaweedfs，seaweedfs会报501错误 A header you provided implies functionality that is not implemented
+                                        //这里发送X-Requested-With标头到后端，让后端返回需要跳转的地址
+                                        let videoRedirectDate = {} as any;
+                                        nativeQueryVideoRedirect(url,function(date:any){
+                                            if(store.systemUser != null && Object.keys(store.systemUser).length>0 && date.isLogin == false && date.isPermission == false){
+                                                //会话续期
+                                                nativeRefreshToken();
+                                                nativeQueryVideoRedirect(url,function(date:any){
+                                                    videoRedirectDate = date;
+                                                });
+                                            }else{
+                                                videoRedirectDate = date;
+                                            }
+                                            
+                                        });
+
+                                        if(videoRedirectDate != null && Object.keys(videoRedirectDate).length>0 && videoRedirectDate.redirect != ''){
+                                            //告诉hls重新发送ts请求
+                                            xhr.open("GET", videoRedirectDate.redirect, true);//用重定向后的地址请求
+                                            // xhr.setRequestHeader("X-Requested-With", 'XMLHttpRequest');
+                                        }
+                                    }else{
+                                        // 请求ts的url 添加参数 props.fileid
+                                        //url = url + "?t=" + props.fileid;
+                                        // 这一步必须 告诉hls重新发送ts请求
+                                        xhr.open("GET", url, true);
+                                        //xhr.setRequestHeader("X-Requested-With", 'XMLHttpRequest');
+                                    }
+                                };
                             },
                         },
                     }
@@ -533,6 +566,7 @@
 			state.placeholder_DPlayer.destroy();//销毁播放器
 		}
         state.videoPlayerBind.length =0
+        state.videoPlayerList.length =0;
         state.playerHlsList.length = 0;//清空数组
         state.lastPlayerId = '';
         state.placeholder_DPlayer = "";
@@ -815,7 +849,21 @@
                         position: relative;
                         top: -2px;
                     }  
-                    .userRoleName{
+                    .userRoleName{/**
+                        display: inline-flex;
+                        white-space:nowrap;
+                        align-items: center;
+                        padding: 2px 4px;
+                        color: #e2b46e;
+                        font-size: 12px;
+                        line-height: 14px;
+                        border-radius: 2px;
+                        background-color:#f8e7c4;
+                        margin-right: 5px;
+                        margin-bottom: 5px;
+                        position: relative;
+                        top: 1px;*/
+                        
                         display: inline-block;
                         white-space:nowrap;
                         vertical-align: middle;

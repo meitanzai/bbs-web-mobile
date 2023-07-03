@@ -7,7 +7,7 @@
                     <van-icon name="wap-home-o" :size="convertViewportWidth('18px')"/>
                 </template>
             </van-nav-bar>
-            <van-pull-refresh v-model="form.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="form.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
             
                 <div class="editTopicModule" v-if="store_systemUser != null && Object.keys(store_systemUser).length>0">
                     <van-form ref="formRef" :scroll-to-error="true" class="form-container" v-if="form.allowTopic">

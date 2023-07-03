@@ -905,6 +905,44 @@ function _getPageBasePath() {
     return '';   
 }
 
+
+
+//获取工具栏距顶部高度
+function getToolbarTopHeight() {
+    var toolbarElement = document.querySelector('.w-e-toolbar');
+   /**
+    //获取当前滚动条的长度
+    var y;
+    if (!!window.pageXOffset) {
+        y = window.pageYOffset
+    } else {
+        y = (document.documentElement || document.body.parentNode || document.body).scrollTop
+    }
+    console.log("获取当前滚动条的长度",y);  */
+
+    return toolbarElement.getBoundingClientRect().top + window.scrollY;   
+}
+
+//获取编辑框距顶部高度
+function getTextTopHeight() {
+    var textElement = document.querySelector('.w-e-text-container');
+    
+    return textElement.getBoundingClientRect().top + window.scrollY;   
+}
+//编辑框是否滑动到浏览器顶部
+function isTextSlideBrowserTop() {
+    var textElement = document.querySelector('.w-e-text-container');
+    if(textElement.getBoundingClientRect().top <0){
+        return true;
+    }else{
+        return false;
+    }
+    
+}
+
+
+
+
 /*
     bold-menu
 */
@@ -1289,6 +1327,16 @@ Panel.prototype = {
         var $container = $('<div class="w-e-panel-container"></div>');
         var width = opt.width || 300; // 默认 300px
         $container.css('width', convertViewportWidth(width + 'px') ).css('margin-left',convertViewportWidth((0 - width) / 2 + 'px') );
+        
+        var height = (getToolbarTopHeight() > getTextTopHeight() ? getToolbarTopHeight() - getTextTopHeight() : 0);
+        if(isTextSlideBrowserTop()){
+            height = height + 46;
+        }else{
+            height = height + 10;
+        }
+        $container.css('top', height + 'px' );
+
+
 
         // 添加关闭按钮
         var $closeBtn = $('<i class="w-e-icon-close w-e-panel-close"></i>');

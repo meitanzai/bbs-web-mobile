@@ -37,6 +37,8 @@ export const useStore = defineStore('main', {
             
             userInfoVersion: 0, //用户信息信息版本  App.vue监听本参数，当数值变化时执行刷新登录用户信息
 
+            isPopUpWindow: false, //是否有弹出窗口
+
             cacheComponents: [] as any,//keepAlive缓存组件
          }
      },
@@ -61,6 +63,11 @@ export const useStore = defineStore('main', {
             }
             return cacheNumber+"::"+createRouter.currentRoute.value.fullPath;
         },
+
+        //是否有弹出窗口
+        getPopUpWindow: function (state) {
+            return state.isPopUpWindow;
+        },
       
     },
     /**
@@ -82,7 +89,11 @@ export const useStore = defineStore('main', {
                     route.meta.cacheNumber = new Date().getTime();
                 }
             }
-        }
+        },
+        //设置是否有弹出窗口
+        setPopUpWindow: function (status:boolean) {
+            this.isPopUpWindow = status;
+        },
  
     }
 })

@@ -35,6 +35,10 @@ export default defineComponent({
             onZoomPicture_renderTemplate: (src:string) => {
                 this.$emit("click-onZoomPicture", src);
             },
+            //图片加载完毕事件
+            onLoadPicture_renderTemplate: (src:string) => {
+                this.$emit("load-onLoadPicture", src);
+            },
             //话题解锁
             onTopicUnhide_renderTemplate: (hideType: number,hidePasswordIndex: number,topicId:string) => {
                 let hidePassword = '';

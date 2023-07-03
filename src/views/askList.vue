@@ -47,7 +47,7 @@
                     <van-tab title="现金悬赏" :name="50"></van-tab>
                 </van-tabs>
             </div>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="askListModule" >
                     <van-list v-model:loading="state.isLoading" :finished="state.isFinished" v-model:error="state.isError" error-text="请求失败，点击重新加载" finished-text="没有更多了" @load="onLoad">
                         <div v-for="(question,index) in state.questionList" :key="question.id" class="item">

@@ -7,7 +7,7 @@
                     <van-icon name="wap-home-o" :size="convertViewportWidth('18px')"/>
                 </template>
             </van-nav-bar>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="realNameAuthenticationModule" >
                     <div class="container">
                         <span v-if="state.user.mobile != null && state.user.mobile != ''" class="mobile">

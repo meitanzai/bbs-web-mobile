@@ -11,7 +11,7 @@
             </van-sticky>
             <!-- 占位播放器 -->
             <div ref ="placeholderVideo" style="width: 0px;height: 0px;"></div>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="helpContentModule">
                     <div class="head">
                         <div class="container">
@@ -64,6 +64,7 @@
     import Hls from 'hls.js';
     import DPlayer from 'dplayer';
     import Prism from "prismjs";
+    import { nativeQueryVideoRedirect, nativeRefreshToken } from '@/utils/http';
 
     const { proxy } = getCurrentInstance() as ComponentInternalInstance;
     const store = useStore(pinia);
@@ -493,6 +494,38 @@
                                     hls = new Hls();
                                     hls.loadSource(video.src);
                                     hls.attachMedia(video);
+                                    hls.config.xhrSetup = (xhr, url) => {
+                                        
+                                        if(url.startsWith(store.apiUrl+"videoRedirect?")){//如果访问视频重定向页
+                                            //如果使用重定向跳转时会自动将标头Authorization发送到seaweedfs，seaweedfs会报501错误 A header you provided implies functionality that is not implemented
+                                            //这里发送X-Requested-With标头到后端，让后端返回需要跳转的地址
+                                            let videoRedirectDate = {} as any;
+                                            nativeQueryVideoRedirect(url,function(date:any){
+                                                if(store.systemUser != null && Object.keys(store.systemUser).length>0 && date.isLogin == false && date.isPermission == false){
+                                                    //会话续期
+                                                    nativeRefreshToken();
+                                                    nativeQueryVideoRedirect(url,function(date:any){
+                                                        videoRedirectDate = date;
+                                                    });
+                                                }else{
+                                                    videoRedirectDate = date;
+                                                }
+                                                
+                                            });
+
+                                            if(videoRedirectDate != null && Object.keys(videoRedirectDate).length>0 && videoRedirectDate.redirect != ''){
+                                                //告诉hls重新发送ts请求
+                                                xhr.open("GET", videoRedirectDate.redirect, true);//用重定向后的地址请求
+                                               // xhr.setRequestHeader("X-Requested-With", 'XMLHttpRequest');
+                                            }
+                                        }else{
+                                            // 请求ts的url 添加参数 props.fileid
+                                            //url = url + "?t=" + props.fileid;
+                                            // 这一步必须 告诉hls重新发送ts请求
+                                            xhr.open("GET", url, true);
+                                            //xhr.setRequestHeader("X-Requested-With", 'XMLHttpRequest');
+                                        }
+                                    };
                                 },
                             },
                         }
@@ -626,7 +659,7 @@
                 font-size: 18px; 
                 color:var(--van-blue);
                 padding:4px 0;
-                margin-top: 3px;
+                margin-top: 6px;
             }
             .typeName{
                 margin-left:12px;

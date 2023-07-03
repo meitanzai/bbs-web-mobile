@@ -28,17 +28,17 @@
         </van-tabbar-item>
     </van-tabbar>
     <van-action-sheet v-model:show="state.popup_find" close-icon="close" title="发现" class="custom-action-sheetModule" >
-        <van-cell title="搜索" is-link :to="{path: '/search'}">
+        <van-cell title="搜索" is-link @click="clickLink('/search')">
             <template #icon>
                 <Icon name="search" :size="convertViewportWidth('16px')" class="icon"/>
             </template>
         </van-cell>
-        <van-cell title="会员卡" is-link :to="{path: '/membershipCardList'}">
+        <van-cell title="会员卡" is-link @click="clickLink('/membershipCardList')">
             <template #icon>
                 <Icon name="membershipCard" :size="convertViewportWidth('16px')" class="icon"/>
             </template>
         </van-cell>
-        <van-cell title="在线帮助" is-link :to="{path: '/help'}">
+        <van-cell title="在线帮助" is-link @click="clickLink('/help')">
             <template #icon>
                 <Icon name="help-alt" :size="convertViewportWidth('16px')" class="icon"/>
             </template>
@@ -48,7 +48,7 @@
 <script lang="ts" setup>
     import { onMounted, getCurrentInstance, ComponentInternalInstance, watch, reactive, onUnmounted,} from 'vue'
     import { AxiosResponse } from 'axios'
-    import { useRouter } from 'vue-router'
+    import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
     import pinia from '@/store/store'
     import {useStore} from '@/store'
     import { storeToRefs } from 'pinia';
@@ -75,9 +75,25 @@
         unreadMessageCount:0,//未读消息总数
 
         timer:{} as any,//查询消息定时器
+
+        isClickLink:false,//是否点击链接
     });
 
 
+    
+    //点击链接
+    const clickLink = (path:string) => {
+        if(router.currentRoute.value.path == path){
+            state.isClickLink = false
+        }else{
+            state.isClickLink = true
+            router.push({
+                path : path
+            });
+        }
+        
+        state.popup_find = false
+    }
     //导航
     const onNavigation = () => {
         if ('index' == state.bottomTab) {
@@ -157,7 +173,19 @@
         }
     }
 
-      //定时查询消息
+    
+
+    //离开当前路由（解决有弹窗按返回键时会返回上一页）
+    onBeforeRouteLeave((to, from) => { 
+       
+        //如果有弹出层，则不离开当前路由
+        if(state.popup_find && !state.isClickLink){
+            store.setPopUpWindow(true);//标记有弹出窗口
+            return false;
+        }
+    })
+
+    //定时查询消息
     const timerUnreadMessage = () =>  {
         queryUnreadMessage();
        

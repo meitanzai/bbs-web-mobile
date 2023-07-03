@@ -9,7 +9,7 @@
                     </template>
                 </van-nav-bar>
             </van-sticky>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="membershipCardModule">
                     <div class="item" v-for="(specification,index) in state.membershipCard.specificationList">
                         <div class="left-layout">

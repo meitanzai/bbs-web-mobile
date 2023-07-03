@@ -10,7 +10,7 @@
                 </van-nav-bar>
             </van-sticky>
 
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
             <div class="remindListModule" >
                 <van-list v-model:loading="state.isLoading" :finished="state.isFinished" v-model:error="state.isError" error-text="请求失败，点击重新加载" finished-text="没有更多了" @load="onLoad">
                    
@@ -59,7 +59,7 @@
                                     </cite> 
                                     在
                                     <cite>
-                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId}}">
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId,reportModule:20}}">
                                             {{remind.topicTitle}}
                                         </router-link>
                                     </cite> 
@@ -74,7 +74,7 @@
                                     </cite> 
                                     在
                                     <cite>
-                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId}}">
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId,replyId:remind.friendTopicReplyId,reportModule:30}}">
                                             {{remind.topicTitle}}
                                         </router-link>
                                     </cite> 
@@ -89,7 +89,7 @@
                                     </cite> 
                                     在
                                     <cite>
-                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId}}">
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId,reportModule:20}}">
                                             {{remind.topicTitle}}
                                         </router-link>
                                     </cite> 
@@ -104,7 +104,7 @@
                                     </cite> 
                                     在
                                     <cite>
-                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.topicCommentId}}">
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.topicCommentId,replyId:remind.friendTopicReplyId,reportModule:30}}">
                                             {{remind.topicTitle}}
                                         </router-link>
                                     </cite> 
@@ -119,11 +119,26 @@
                                     </cite> 
                                     在
                                     <cite>
-                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId}}">
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId,replyId:remind.friendTopicReplyId,reportModule:30}}">
                                             {{remind.topicTitle}}
                                         </router-link>
                                     </cite> 
                                     回复了我回复过的评论
+                                </div>
+                                <div v-if="remind.typeCode == 55">
+                                    <cite>
+                                        <span class="cancelAccount" v-if="remind.senderAccount == null || remind.senderAccount == ''">此用户账号已注销</span>
+                                        <router-link tag="a" :to="{path:'/user/control/home',query:{userName:remind.senderUserName}}">
+                                            {{remind.senderNickname != null && remind.senderNickname != '' ? remind.senderNickname : remind.senderAccount}}
+                                        </router-link>
+                                    </cite> 
+                                    在
+                                    <cite>
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId,replyId:remind.friendTopicReplyId,reportModule:30}}">
+                                            {{remind.topicTitle}}
+                                        </router-link>
+                                    </cite> 
+                                    回复了我的评论回复
                                 </div>
                                 <div v-if="remind.typeCode == 60">
                                     <cite>
@@ -189,7 +204,7 @@
                                     </cite> 
                                     在
                                         <cite>
-                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId}}">
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId,reportModule:20}}">
                                             {{remind.topicTitle}}
                                         </router-link>
                                     </cite> 
@@ -205,7 +220,7 @@
                                     </cite> 
                                     在
                                         <cite>
-                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId}}">
+                                        <router-link tag="a" :to="{path:'/thread',query:{topicId:remind.topicId,commentId:remind.friendTopicCommentId,replyId:remind.friendTopicReplyId,reportModule:30}}">
                                             {{remind.topicTitle}}
                                         </router-link>
                                     </cite> 
@@ -220,7 +235,7 @@
                                     </cite> 
                                     在
                                         <cite>
-                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.friendQuestionAnswerId}}">
+                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.friendQuestionAnswerId,reportModule:50}}">
                                             {{remind.questionTitle}}
                                         </router-link>
                                     </cite> 
@@ -235,7 +250,7 @@
                                     </cite> 
                                     在
                                         <cite>
-                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.friendQuestionAnswerId}}">
+                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.friendQuestionAnswerId,replyId:remind.friendQuestionReplyId,reportModule:60}}">
                                             {{remind.questionTitle}}
                                         </router-link>
                                     </cite> 
@@ -250,7 +265,7 @@
                                     </cite> 
                                     在
                                         <cite>
-                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.questionAnswerId}}">
+                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.questionAnswerId,replyId:remind.friendQuestionReplyId,reportModule:60}}">
                                             {{remind.questionTitle}}
                                         </router-link>
                                     </cite> 
@@ -265,11 +280,26 @@
                                     </cite> 
                                     在
                                         <cite>
-                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.friendQuestionAnswerId}}">
+                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.friendQuestionAnswerId,replyId:remind.friendQuestionReplyId,reportModule:60}}">
                                             {{remind.questionTitle}}
                                         </router-link>
                                     </cite> 
                                     回复了我回复过的答案
+                                </div>
+                                <div v-if="remind.typeCode == 160">
+                                    <cite>
+                                        <span class="cancelAccount" v-if="remind.senderAccount == null || remind.senderAccount == ''">此用户账号已注销</span>
+                                        <router-link tag="a" :to="{path:'/user/control/home',query:{userName:remind.senderUserName}}">
+                                            {{remind.senderNickname != null && remind.senderNickname != '' ? remind.senderNickname : remind.senderAccount}}
+                                        </router-link>
+                                    </cite> 
+                                    在
+                                        <cite>
+                                        <router-link tag="a" :to="{path:'/question',query:{questionId:remind.questionId,answerId:remind.friendQuestionAnswerId,replyId:remind.friendQuestionReplyId,reportModule:60}}">
+                                            {{remind.questionTitle}}
+                                        </router-link>
+                                    </cite> 
+                                    回复了我的答案回复
                                 </div>
                             </div>
                         </div>

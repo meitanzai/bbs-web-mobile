@@ -13,7 +13,7 @@
     <van-empty v-if="supportAccessDevice != 1 && supportAccessDevice != 3" image="error" image-size="180" description="手机端浏览入口已关闭，请尝试使用电脑端浏览器访问本站">
         <van-button round type="primary" @click="setAccessMobile">访问电脑端网站</van-button>
     </van-empty>          
-
+<div style="position: absolute;top: 100px;"></div>
 </template>
 
 <script setup lang="ts">
@@ -23,6 +23,7 @@
     import {useStore} from '@/store'
     import { storeToRefs } from 'pinia';
     import { onBrowserback } from './utils/history';
+import { onBeforeRouteUpdate } from 'vue-router';
 
 
 
@@ -97,8 +98,6 @@
         //查询基本信息(基本信息包含登录用户信息)
         queryBaseInfo();
     })
-
-
 
     onMounted(()=>{
         //查询基本信息

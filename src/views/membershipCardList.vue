@@ -3,7 +3,7 @@
     <div class="main">
         <div class="main-container">
             <van-nav-bar title="会员卡套餐"></van-nav-bar>
-            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" @refresh="onRefresh" style="min-height: 50vh;">
+            <van-pull-refresh v-model="state.isRefreshing" success-text="刷新成功" pull-distance="200" @refresh="onRefresh" style="min-height: 50vh;">
                 <div class="membershipCardListModule">
                     <div class="item" v-for="membershipCard in state.membershipCardList">
                         <div class="top-container">
