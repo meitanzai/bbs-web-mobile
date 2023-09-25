@@ -9,6 +9,10 @@ declare module '@vue/runtime-core' {
   export interface GlobalComponents {
     BottomTabbar: typeof import('./src/components/BottomTabbar.vue')['default']
     Icon: typeof import('./src/components/icon/Icon.vue')['default']
+    MarkdownEditorEmojiPicker: typeof import('./src/components/MarkdownEditorEmojiPicker.vue')['default']
+    MarkdownEditorHelpPopup: typeof import('./src/components/MarkdownEditorHelpPopup.vue')['default']
+    MarkdownEditorHidePicker: typeof import('./src/components/MarkdownEditorHidePicker.vue')['default']
+    NotifyHtml: typeof import('./src/components/NotifyHtml.vue')['default']
     RenderTemplate: typeof import('./src/components/RenderTemplate.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

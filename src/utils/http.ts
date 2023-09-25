@@ -483,3 +483,32 @@ export let nativeQueryVideoRedirect = (url:string,callback:any) =>{
     };
     xmlhttp.send(null);
 };
+
+//原生ajax文件下载重定向
+export let nativeDownloadRedirect = (url:string,callback:any) =>{
+    let xmlhttp = new window.XMLHttpRequest();
+    xmlhttp.open('GET', url , false);//同步
+    xmlhttp.setRequestHeader("X-Requested-With","XMLHttpRequest");//标记报头为AJAX
+
+    //从localStorage中获取登录令牌
+    let bbsToken = window.localStorage.getItem('bbsToken');
+    if(bbsToken != null){
+        let tokenObject = JSON.parse(bbsToken);
+        //会话token
+        let sessionToken = tokenObject.accessToken+","+tokenObject.refreshToken;
+        // header 添加参数
+        xmlhttp.setRequestHeader("Authorization", 'Bearer '+sessionToken);
+    }
+    xmlhttp.onreadystatechange = function(){
+        if (xmlhttp.readyState == 4) {//readystate 
+            if(xmlhttp.status == 200){
+                let result = xmlhttp.responseText;
+                if(result != ""){
+                    let date = JSON.parse(result);
+                    callback(date);
+                }
+            }
+        }
+    };
+    xmlhttp.send(null);
+};

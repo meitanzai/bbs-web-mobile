@@ -16,11 +16,14 @@
                             
                             <van-field center :error-message="error.content">
                                 <template #input>
-                                    <div style="margin-left: -11px;">
+                                    <div v-show="!form.isMarkdown" style="margin-left: -11px;">
                                         <van-sticky :z-index="1" >
                                             <div ref="topicContentEditorToolbarRef" class="editor-toolbar" style="padding-top: 5px;"></div>
                                         </van-sticky>
                                         <div ref="topicContentEditorTextRef"  class="editor-text" style="min-height: 320px;"></div>
+                                    </div>
+                                    <div v-if="form.isMarkdown" style="width: 100%;">
+                                        <Editor mode="tab" :editorId="'editTopic'" :value="form.markdownContent" :plugins="form.editTopicEditorPlugin" :locale="zhHans" :editorConfig="markdownEditorConfig" :sanitize="editTopicSanitize" placeholder="请输入内容..." @change="handleMarkdownChange"/>
                                     </div>
                                 </template>
                             </van-field>
@@ -62,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref, onUnmounted, watchEffect, onActivated} from 'vue'
+import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref, onUnmounted, watchEffect, onActivated, nextTick} from 'vue'
     import { onBeforeRouteUpdate, useRouter } from 'vue-router'
     import { AxiosResponse } from 'axios'
     import { getPageBasePath,  processErrorInfo} from '@/utils/tool';
@@ -74,7 +77,18 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
     import { convertViewportWidth } from '@/utils/px-to-viewport';
     import { createEditor, destroyEditor } from '@/utils/editor';
     import { escapeVueHtml } from '@/utils/escape';
-    
+    import { markdownPlugins,markdownEditorConfig,sanitize, markdownToHtml } from '@/utils/markdownEditor';
+    import { toggleEditor } from '@/utils/markdownPlugin/plugin-toggle-editor';
+    import { help } from '@/utils/markdownPlugin/plugin-help';
+    import { emoji } from '@/utils/markdownPlugin/plugin-emoji';
+    import { imageUpload } from '@/utils/markdownPlugin/plugin-image-upload';
+    import { pasteImageUpload } from '@/utils/markdownPlugin/plugin-paste-image';
+    import { fileUpload } from '@/utils/markdownPlugin/plugin-file-upload';
+    import { videoUpload } from '@/utils/markdownPlugin/plugin-video-upload';
+    import { hideContent } from '@/utils/markdownPlugin/plugin-hide-content';
+    import type { BytemdPlugin } from 'bytemd'
+    import { Editor } from '@bytemd/vue-next'
+    import zhHans from 'bytemd/locales/zh_Hans.json'
   
     const { proxy } = getCurrentInstance() as ComponentInternalInstance;
     const store = useStore(pinia);
@@ -100,11 +114,14 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         topicId:'',//话题Id
         allowTopic:true,//是否允许提交话题
         userGradeList:[],//用户等级
-        availableTag:[],//话题编辑器允许使用标签
+        availableTag:[] as Array<string>,//话题编辑器允许使用标签
         fileSystem:0,//文件存储系统
+        supportEditor:10,//支持编辑器
 
         title:'',//标题
         content:'',//内容
+        markdownContent:'',//markdown内容
+        isMarkdown:false,//是否使用markdown编辑器
 
         showCaptcha:false,//是否显示验证码
         captchaKey: '',//验证码key
@@ -114,6 +131,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 
         editTopicEditor :{} as any,//修改话题编辑器
 		editTopicEditorCreateParameObject :{} as any,//修改话题编辑器的创建参数
+
+        editTopicEditorPlugin:[] as BytemdPlugin[],//添加话题Markdown编辑器插件
 
         isRefreshing:false,//是否处于下拉加载中状态
     })
@@ -133,9 +152,13 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         form.userGradeList.length =0;//用户等级
         form.availableTag.length =0;//话题编辑器允许使用标签
         form.fileSystem = 0,//文件存储系统
+        form.supportEditor=10;//支持编辑器
+
 
         form.title = '';//标题
         form.content = '';//内容
+        form.markdownContent='';//markdown内容
+        form.isMarkdown = false;//是否使用markdown编辑器
 
         form.showCaptcha = false;//是否显示验证码
         form.captchaKey =  '';//验证码key
@@ -149,9 +172,61 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         }
 		form.editTopicEditorCreateParameObject = {} as any;//添加话题编辑器的创建参数
         
+        form.editTopicEditorPlugin.length =0;
+
         init();
     };
 
+
+    //处理Markdown
+    const handleMarkdownChange = (value: string) => {
+        form.markdownContent = value;
+    }
+
+    //白名单
+    const editTopicSanitize = (schema: any) => {
+        schema = sanitize(schema);
+        
+        if(form.availableTag?.indexOf('embedVideo') != -1){//嵌入视频
+            schema.tagNames.push('iframe');
+        }
+
+        return schema;
+    }
+
+    //处理切换到富文本编辑器
+    const handleToggleRichtextEditor = (editorId: string) => {
+        form.isMarkdown = false;
+        nextTick(()=>{
+            if (Object.keys(form.editTopicEditorCreateParameObject).length != 0) {//不等于空
+                //创建富文本编辑器
+                form.editTopicEditor = createEditor(
+                    form.editTopicEditorCreateParameObject.toolbarRef, 
+                    form.editTopicEditorCreateParameObject.textRef, 
+                    form.editTopicEditorCreateParameObject.editorIconList, 
+                    getPageBasePath()+'common/default/', 
+                    form.editTopicEditorCreateParameObject.uploadPath, 
+                    form.editTopicEditorCreateParameObject.userGradeList,
+                    form.fileSystem,
+                    (editorId: string)=>{
+                        handleToggleMarkdownEditor(editorId);
+                    }
+                );
+            }
+        })
+        
+        
+    }
+
+    //处理切换到Markdown编辑器
+    const handleToggleMarkdownEditor = (editorId: string) => {
+        
+        if (Object.keys(form.editTopicEditor).length != 0) {//不等于空
+			destroyEditor(form.editTopicEditor);
+            form.editTopicEditor = {};
+		}
+        form.isMarkdown = true;
+    }
 
 
     
@@ -178,6 +253,10 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                     let topic = data.topic;
                     if(topic){
                         form.title = topic.title;
+                        if(topic.isMarkdown != null && topic.isMarkdown == true){
+                            form.isMarkdown = true;
+                            form.markdownContent = topic.markdownContent;
+                        }
                     }
                     
 
@@ -213,6 +292,7 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                     
                     form.fileSystem = data.fileSystem;//文件存储系统
 
+                    
                     if (data.captchaKey != undefined && data.captchaKey != '') {
                         form.showCaptcha = true;
                         form.captchaKey = data.captchaKey;
@@ -264,6 +344,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 								editorIconList.push("hidePoint");
 							}else if(_availableTag == "hideAmount"){//余额购买可见
 								editorIconList.push("hideAmount");
+							}else if(_availableTag == "toggleEditor"){//切换编辑器
+								editorIconList.push("toggleEditor");
 							}
 						}
                         for(let i=0; i< editorIconList.length; i++){
@@ -274,25 +356,80 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                                 break;
                             }
                         }
-
-                        //处理节点路径
-                        let contentNode = document.createElement("div");
-                        contentNode.innerHTML = topic.content;
-                        processNodePath(contentNode);
-                        
-                        topic.content = escapeVueHtml(contentNode.innerHTML);
-
-                        //创建富文本编辑器
-                        form.editTopicEditor = createEditor(topicContentEditorToolbarRef.value,topicContentEditorTextRef.value,editorIconList, getPageBasePath()+'common/default/', uploadPath, form.userGradeList,form.fileSystem);
-                        form.editTopicEditor.txt.html(topic.content);//初始化内容
-                        if (Object.keys(form.editTopicEditor).length > 0) {
-                            form.editTopicEditorCreateParameObject = {
-                                toolbarRef:topicContentEditorToolbarRef.value,
-                                textRef:topicContentEditorTextRef.value,
-                                editorIconList:editorIconList,
-                                uploadPath:uploadPath,
-                                userGradeList:form.userGradeList
+                        if(form.editTopicEditorPlugin != null && form.editTopicEditorPlugin.length ==0){
+                            //添加插件
+                            form.editTopicEditorPlugin.push(...markdownPlugins);
+                            
+                            
+                            if(form.supportEditor == 30 || form.supportEditor == 40){//10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                                form.editTopicEditorPlugin.push(
+                                    toggleEditor((editorId: string)=>{handleToggleRichtextEditor(editorId)})
+                                );
                             }
+                            
+                            if(form.availableTag?.indexOf('hidePassword') != -1 
+                                || form.availableTag?.indexOf('hideComment') != -1
+                                || form.availableTag?.indexOf('hideGrade') != -1 
+                                || form.availableTag?.indexOf('hidePoint') != -1 
+                                || form.availableTag?.indexOf('hideAmount') != -1
+                                ){
+                                form.editTopicEditorPlugin.push(
+                                    hideContent(form.availableTag,form.userGradeList)
+                                );
+                            }
+
+                            if(editorIconList?.indexOf('uploadVideo') != -1){
+                                form.editTopicEditorPlugin.push(
+                                    videoUpload("user/control/topic/upload?method=upload","file",form.fileSystem)
+                                );
+                            }
+                            if(editorIconList?.indexOf('image') != -1){
+                                form.editTopicEditorPlugin.push(
+                                    imageUpload("user/control/topic/upload?method=upload",'file',form.fileSystem)
+                                );
+                                form.editTopicEditorPlugin.push(
+                                    pasteImageUpload("user/control/topic/upload?method=upload",'file',form.fileSystem)
+                                );
+                            }  
+                            if(editorIconList?.indexOf('file') != -1){
+                                form.editTopicEditorPlugin.push(
+                                    fileUpload("user/control/topic/upload?method=upload",'file',form.fileSystem)
+                                );
+                            }
+                            form.editTopicEditorPlugin.push(emoji());
+
+                            form.editTopicEditorPlugin.push(
+                                help(editorIconList,form.userGradeList)
+                            );
+                            
+                        }
+
+
+                        if(!form.isMarkdown){
+                            //创建富文本编辑器
+                            //处理节点路径
+                            let contentNode = document.createElement("div");
+                            contentNode.innerHTML = topic.content;
+                            processNodePath(contentNode);
+                            
+                            topic.content = escapeVueHtml(contentNode.innerHTML);
+
+                            //创建富文本编辑器
+                            form.editTopicEditor = createEditor(topicContentEditorToolbarRef.value,topicContentEditorTextRef.value,editorIconList, getPageBasePath()+'common/default/', uploadPath, form.userGradeList,form.fileSystem,(editorId: string)=>{
+                                handleToggleMarkdownEditor(editorId);
+                            });
+                            form.editTopicEditor.txt.html(topic.content);//初始化内容
+                        }
+
+                        
+                        
+                        
+                        form.editTopicEditorCreateParameObject = {
+                            toolbarRef:topicContentEditorToolbarRef.value,
+                            textRef:topicContentEditorTextRef.value,
+                            editorIconList:editorIconList,
+                            uploadPath:uploadPath,
+                            userGradeList:form.userGradeList
                         }
 
                     }
@@ -426,10 +563,18 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                     formData.append('title', form.title);
                 }
 
-                let content =  form.editTopicEditor.txt.html()
-                if(content != null && content !=''){
-                    formData.append('content', content);
+
+                if(form.isMarkdown){
+                    formData.append('isMarkdown', form.isMarkdown.toString());
+                    formData.append('markdownContent', form.markdownContent);
+                }else{
+                    let content =  form.editTopicEditor.txt.html()
+                    if(content != null && content !=''){
+                        formData.append('content', content);
+                    }
                 }
+
+                
 
               
                 //验证码Key
@@ -536,7 +681,16 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 </script>
 <style scoped lang="scss">
 .editTopicModule{
-    
+    :deep(.bytemd-editor){
+        min-height: 250px !important; 
+    }
+    :deep(.CodeMirror-sizer){
+        min-height: 245px !important; 
+    }
+    :deep(.bytemd-preview){
+        min-height: 250px !important; 
+    }
+
     .form-container{
         :deep(.van-radio--horizontal){
             margin-top: 2px;

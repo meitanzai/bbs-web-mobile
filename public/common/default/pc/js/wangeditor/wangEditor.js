@@ -3445,12 +3445,13 @@ Hide.prototype = {
 	// 点击事件
 	onClick: function onClick(e) {
 	    var editor = this.editor;
+        var $elem = this.$elem;
 	    if (this._active) {//选中隐藏标签
 	    	var $selectionELem = editor.selection.getSelectionContainerElem();
 	        if (!$selectionELem) {
 	            return;
 	        }
-	        
+
 	        var $hide = $selectionELem.parentUntil('HIDE');
 	        if ($hide != null){
 	        	var visibleType = $($hide).attr('hide-type');
@@ -4075,9 +4076,18 @@ Hide.prototype = {
 	 * event 事件
 	 * node 选中节点
 	 */
-    jumpHideLabel: function jumpHideLabel(event,node) {
+    jumpHideLabel: function jumpHideLabel(event,node,menuElem) {
     	var editor = this.editor;
-    	var elem = node[0];
+        var elem = node[0];
+        var nodeName = node.getNodeName();
+        if(nodeName == "HIDE"){
+            elem = node[0];
+        }else{
+            var $hide = node.parentUntil('HIDE');
+            if ($hide != null){
+                elem = $hide[0];
+            }
+        }
 
  	  
  	   //<hide>标签左下角相对屏幕坐标X轴
@@ -4097,6 +4107,7 @@ Hide.prototype = {
  	    //小按钮右下角坐标Y轴
  	    var button_right_bottom_y = hide_clientRect_y;
   	   
+        
  	    //判断鼠标的坐标是否在这一区域
  	  	if( event.clientX > button_left_top_x && event.clientX <button_right_bottom_x && event.clientY >button_left_top_y && event.clientY < button_right_bottom_y){
  	  		/**
@@ -4108,45 +4119,47 @@ Hide.prototype = {
  	         editor.selection.createRangeByElem($last, false, true);
  	         editor.selection.restoreSelection();
  	 	    **/
-
+            this._active = false;
+            menuElem.removeClass('w-e-active');
  	 	    
  	 	    
  	 	    var editor = this.editor;
  	 		    
  	 	    var $containerElem = editor.selection.getSelectionContainerElem();
  	 	    // 判断选区内容是否在编辑内容之内
- 	      //   if (!$containerElem) {
- 	     //        return;
- 	      //   }
+ 	         if (!$containerElem) {
+ 	             return;
+ 	         }
  	 	    
+             /**
  	 	    var parent = $containerElem;
- 	 	    var _nodeName = parent.getNodeName();
 
-	 	 	if(_nodeName != "HIDE"){//当前节点为hide
-	 	 		parent = parent.parent();
- 	 	    }else{
- 	 	    	while (parent.parent()) {
- 		 			var nodeName = parent.getNodeName();
- 		 			if(nodeName == "HIDE"){
- 		 				parent = parent.parent();
- 		 				break;
- 		 			}
- 		 			if(nodeName == "BODY"){
- 		 				parent = null;
- 		 				break;
- 		 			}
- 		 			parent = parent.parent();
- 		 		}
- 	 	    }
-	 	 	
-	    	if (parent != null){
-	         	var $children = parent.children();
-	         	var $last = $children.last();
-	         	
-	         	parent.append($('<p><br></p>'));
-	            editor.selection.createRangeByElem(parent, false, true);
-	    	}
- 	         editor.selection.restoreSelection();
+            while (parent.parent()) {
+                var nodeName = parent.getNodeName();
+                if(nodeName == "HIDE"){
+                    parent = parent.parent();
+                    break;
+                }
+                if(nodeName == "BODY"){
+                    parent = null;
+                    break;
+                }
+                parent = parent.parent();
+            } */
+ 	 	    
+            var current = node;
+            if($containerElem.getNodeName() != "HIDE"){
+                var $hide = node.parentUntil('HIDE');
+                if ($hide != null){
+                    current = $hide;
+                }
+            }
+
+            var $p = $('<p><br></p>');
+            
+            $p.insertAfter(current);
+            editor.selection.createRangeByElem( $p, false,true);
+ 	        editor.selection.restoreSelection();
  	         
  	  	}
   	   
@@ -4165,12 +4178,33 @@ Hide.prototype = {
         
         var $hide = $selectionELem.parentUntil('HIDE');
         if ($hide != null){
+            this._active = true;
+            $elem.addClass('w-e-active');
+            this.jumpHideLabel(e,$selectionELem,$elem);
+            return;
+       }
+       var nodeName = $selectionELem.getNodeName();
+       if (nodeName === 'HIDE') {
+           this._active = true;
+           $elem.addClass('w-e-active');
+           this.jumpHideLabel(e,$selectionELem,$elem);
+       } else {
+           this._active = false;
+           $elem.removeClass('w-e-active');
+       }
+
+        /**
+        var $hide = $selectionELem.parentUntil('HIDE');
+        console.log("试图改变 active 状态2--",$hide);
+       
+        if ($hide != null){
         	 this._active = true;
              $elem.addClass('w-e-active');
         	 return;
         }
-
+      
         var nodeName = $selectionELem.getNodeName();
+        console.log("试图改变 active 状态3",nodeName);
         if (nodeName === 'HIDE') {
             this._active = true;
             $elem.addClass('w-e-active');
@@ -4178,14 +4212,43 @@ Hide.prototype = {
         } else {
             this._active = false;
             $elem.removeClass('w-e-active');
-        }
+        }**/
 
     }
 	
 };
 
 
+/*
+menu - toggleEditor 切换编辑器
+*/
+//构造函数
+function ToggleEditor(editor) {
+	this.editor = editor;
+	this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-toggleEditor"></i>\n        </div>');
+	this.type = 'panel';
+	// 当前是否 active 状态
+	this._active = false;
+}
 
+//原型
+ToggleEditor.prototype = {
+	constructor: ToggleEditor,
+	
+	// 点击事件
+	onClick: function onClick(e) {
+	    var editor = this.editor;
+	    var config = editor.config;
+
+        var customToggleEditor = config.customToggleEditor;
+        
+        if (customToggleEditor && typeof customToggleEditor === 'function') {
+            customToggleEditor();
+            // 阻止以下代码执行
+            return;
+        }
+    }
+};
 
 /*
     所有菜单的汇总
@@ -4236,6 +4299,8 @@ MenuConstructors.image = Image;
 
 MenuConstructors.file = File;
 MenuConstructors.hide = Hide;
+MenuConstructors.toggleEditor = ToggleEditor;
+
 /*
     菜单集合
 */
@@ -4621,7 +4686,7 @@ Text.prototype = {
     _enterKeyHandle: function _enterKeyHandle() {
         var editor = this.editor;
         var $textElem = editor.$textElem;
-
+        
         function insertEmptyP($selectionElem) {
             var $p = $('<p><br></p>');
             $p.insertBefore($selectionElem);
@@ -4639,6 +4704,12 @@ Text.prototype = {
                 // 回车之前光标所在一个 <p><code>.....</code></p> ，忽然回车生成一个空的 <p><code><br></code></p>
                 // 而且继续回车跳不出去，因此只能特殊处理
                 insertEmptyP($selectionElem);
+                return;
+            }
+
+            var nodeName = $selectionElem.getNodeName();
+            if (nodeName === 'HIDE') {
+            	
                 return;
             }
             /**
@@ -4686,6 +4757,7 @@ Text.prototype = {
             if (!$selectionElem) {
                 return;
             }
+            
             var $parentElem = $selectionElem.parent();
             var selectionNodeName = $selectionElem.getNodeName();
             var parentNodeName = $parentElem.getNodeName();
@@ -4694,9 +4766,10 @@ Text.prototype = {
                 // 必须原生支持 insertHTML 命令
                 return;
             }
-            
-            //处理隐藏标签
-            if (selectionNodeName === 'HIDE') {
+
+
+            var $hide = $selectionElem.parentUntil('HIDE');
+            if (selectionNodeName == 'HIDE' || $hide != null){
                 //软回车效果
                 if (window.getSelection) {
                 	var selection = window.getSelection(),
@@ -4714,14 +4787,82 @@ Text.prototype = {
                 }
                 // 阻止默认行为, 防止回车换行
                 e.preventDefault();
+            }
+           
+
+
+
+            
+            if (selectionNodeName != 'HIDE') {
+                if (selectionNodeName !== 'CODE' || parentNodeName !== 'PRE') {
+                    // 不符合要求 忽略
+                    return;
+                }
+                // 处理：光标定位到代码末尾，联系点击两次回车，即跳出代码块
+                if (editor._willBreakCode === true) {
+                    // 此时可以跳出代码块
+                    // 插入 <p> ，并将选取定位到 <p>
+                    var $p = $('<p><br></p>');
+                    $p.insertAfter($parentElem);
+                    editor.selection.createRangeByElem($p, true);
+                    editor.selection.restoreSelection();
+
+                    // 修改状态
+                    editor._willBreakCode = false;
+
+                    e.preventDefault();
+                    return;
+                }
+
+                var _startOffset = editor.selection.getRange().startOffset;
 
                 
+                
+                // 处理：回车时，不能插入 <br> 而是插入 \n ，因为是在 pre 标签里面
+                editor.cmd.do('insertHTML', '\n');
+                editor.selection.saveRange();
+                if (editor.selection.getRange().startOffset === _startOffset) {
+                    // 没起作用，再来一遍
+                    editor.cmd.do('insertHTML', '\n');
+                }
+
+                var codeLength = $selectionElem.html().length;
+                if (editor.selection.getRange().startOffset + 1 === codeLength) {
+                    // 说明光标在代码最后的位置，执行了回车操作
+                    // 记录下来，以便下次回车时候跳出 code
+                    editor._willBreakCode = true;
+                }
+
+                // 阻止默认行为, 防止回车换行
+                e.preventDefault();
+            }
+
+            /**
+            //处理隐藏标签
+            if (selectionNodeName === 'HIDE') {
+
+                //软回车效果
+                if (window.getSelection) {
+                	var selection = window.getSelection(),
+                    range = selection.getRangeAt(0),
+                    br = document.createElement("br");
+                    range.deleteContents();
+                    range.insertNode(br);
+                    range.setStartAfter(br);
+                    range.setEndAfter(br);
+                    range.collapse(false);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    
+                   
+                }
+                // 阻止默认行为, 防止回车换行
+                e.preventDefault();
             }else{
             	if (selectionNodeName !== 'CODE' || parentNodeName !== 'PRE') {
                     // 不符合要求 忽略
                     return;
                 }
-
                 // 处理：光标定位到代码末尾，联系点击两次回车，即跳出代码块
                 if (editor._willBreakCode === true) {
                     // 此时可以跳出代码块
@@ -4760,9 +4901,7 @@ Text.prototype = {
                 // 阻止默认行为, 防止回车换行
                 e.preventDefault();
             	
-            }
-            
-            
+            }**/
         }
 
         $textElem.on('keydown', function (e) {
@@ -4786,6 +4925,36 @@ Text.prototype = {
             if (e.keyCode !== 8) {
                 return;
             }
+            var $selectionElem = editor.selection.getSelectionContainerElem();
+
+            //退格键删除隐藏标签
+            if($selectionElem.getNodeName() == "HIDE"){
+                //<hide class="inputValue_20" hide-type="20"></hide>
+                if($selectionElem.children() != undefined && $selectionElem.children().length == undefined 
+                        && $selectionElem.text() == ''){
+
+                    $selectionElem.remove();
+                    editor.selection.restoreSelection();
+                    e.preventDefault();
+                    return;
+                }
+
+
+                //<hide class="inputValue_20" hide-type="20"><br></hide>
+                if($selectionElem.children() != undefined && $selectionElem.children().length == 1
+                        && $selectionElem.text() == ''
+                        && $selectionElem.children()[0].outerHTML == '<br>'){// $selectionElem.children()[0]为 HTMLBRElement类型数据    Object.prototype.toString.call($selectionElem.children()[0])
+                   
+                    $selectionElem.remove();
+                    editor.selection.restoreSelection();
+                    e.preventDefault();
+                    return;
+                }
+            }
+            
+
+
+            //按下退格键
             var txtHtml = $textElem.html().toLowerCase().trim();
             if (txtHtml === '<p><br></p>') {
                 // 最后剩下一个空行，就不再删除了
@@ -4798,6 +4967,7 @@ Text.prototype = {
             if (e.keyCode !== 8) {
                 return;
             }
+            //释放退格键
             var $p = void 0;
             var txtHtml = $textElem.html().toLowerCase().trim();
 

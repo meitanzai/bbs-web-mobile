@@ -23,8 +23,9 @@ declare var window : any;
  * @param uploadPath 上传文件路径  例如control/topic/manage?method=upload
  * @param userGradeList 会员等级
  * @param fileStorageSystem 使用的文件存储系统
+ * @param callback 回调
  */
-export function createEditor(editorToolbarRef:any,editorTextRef:any, menus:Array<string>,emojiPath:string, uploadPath:string, userGradeList:Array<UserGrade> | null,fileStorageSystem:number) {
+export function createEditor(editorToolbarRef:any,editorTextRef:any, menus:Array<string>,emojiPath:string, uploadPath:string, userGradeList:Array<UserGrade> | null,fileStorageSystem:number,callback:(id: string) => void) {
     
     let baseURL = store.apiUrl;//后端地址
 
@@ -56,6 +57,8 @@ export function createEditor(editorToolbarRef:any,editorTextRef:any, menus:Array
 							 //   'redo'  // 重复
 							     'hide',  // 插入隐藏栏
 							     ];**/
+	
+								
     editor.customConfig.menus = menus;
     editor.customConfig.uploadImgServer = uploadPath;
     editor.customConfig.onchange = function (html:any) {
@@ -204,7 +207,12 @@ export function createEditor(editorToolbarRef:any,editorTextRef:any, menus:Array
     	
     	
     	
-    }
+    },
+
+	//切换编辑器
+	editor.customConfig.customToggleEditor = function () {
+		callback(editorTextRef.getAttribute('editorId'));
+	}
     /**
     editor.customConfig.uploadImgHooks = {
 	    // 如果服务器端返回的不是 {errno:0, data: [...]} 这种格式，可使用该配置
@@ -338,6 +346,7 @@ function editorCustomUpload(files:any, insert:any,uploadImgServer:any,uploadFile
 							data: data,
 							showLoading: false,//是否显示加载图标
 							loadingMask:false,// 是否显示遮罩层
+							timeout: 0,// 定义请求超时时间
 							isCorsDefaultHeaders:true,//仅提交CORS默认允许的响应头
 						})
 						.then((response: AxiosResponse) => {
@@ -423,6 +432,7 @@ function editorCustomUpload(files:any, insert:any,uploadImgServer:any,uploadFile
 							data: data,
 							showLoading: false,//是否显示加载图标
 							loadingMask:false,// 是否显示遮罩层
+							timeout: 0,// 定义请求超时时间
 							isCorsDefaultHeaders:true,//仅提交CORS默认允许的响应头
 						})
 						.then((response: AxiosResponse) => {
@@ -509,6 +519,7 @@ function editorCustomUpload(files:any, insert:any,uploadImgServer:any,uploadFile
 							data: data,
 							showLoading: false,//是否显示加载图标
 							loadingMask:false,// 是否显示遮罩层
+							timeout: 0,// 定义请求超时时间
 							isCorsDefaultHeaders:true,//仅提交CORS默认允许的响应头
 						})
 						.then((response: AxiosResponse) => {
@@ -564,6 +575,7 @@ function editorCustomUpload(files:any, insert:any,uploadImgServer:any,uploadFile
                 data: formData,
 				showLoading: false,//是否显示加载图标
 				loadingMask:false,// 是否显示遮罩层
+				timeout: 0,// 定义请求超时时间
 			})
 			.then((response: AxiosResponse) => {
 				const result: any = response.data;

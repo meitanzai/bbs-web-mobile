@@ -138,14 +138,14 @@
                             </div> 
                         
                         </div>
-                        <div class="topicContent" v-if="!state.isTopicSkeleton" :class="router.currentRoute.value.query.reportModule !=undefined && parseInt(router.currentRoute.value.query.reportModule as string) == 10 ? 'reportMark' : ''">
+                        <div v-if="!state.isTopicSkeleton" :class="[state.topic.isMarkdown != null && state.topic.isMarkdown == true ? 'markdown-body-custom topicMarkdownContent' : 'topicContent',router.currentRoute.value.query.reportModule !=undefined && parseInt(router.currentRoute.value.query.reportModule as string) == 10 ? 'reportMark' : '']">
                             <div class="lastUpdateTime" v-if="state.topic.lastUpdateTime != null">最后修改时间：{{state.topic.lastUpdateTime}}</div>
                             
                             
                             <div class="cancelAccount" v-if="state.topic.account == null || state.topic.account == ''">此用户账号已注销</div>
                             
                             <div :ref="'topic_'+state.topic.id">
-                                <RenderTemplate @click-onZoomPicture="onZoomPicture" @load-onLoadPicture="onLoadPicture" @click-onTopicUnhide="onTopicUnhide" :html="state.topic.content"></RenderTemplate>
+                                <RenderTemplate @click-onZoomPicture="onZoomPicture" @load-onLoadPicture="onLoadPicture" @click-onTopicUnhide="onTopicUnhide" @click-onDownload="onDownload" :html="state.topic.content"></RenderTemplate>
                                         
                             </div>
 
@@ -210,17 +210,20 @@
                         <van-button round block plain type="primary" native-type="submit" @click="queryPreviousCommentList(state.topicId, state.initialPage-1)" >上一页评论</van-button>
                     </div>
                     <!-- 添加评论 -->
-                    <van-popup v-model:show="state.popup_addComment" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
+                    <van-popup v-model:show="state.popup_addComment" :lock-scroll="false" @close="closeAddComment" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
                         <div class="addCommentModule">
-                            <van-form :ref="'formAddCommentRef'" :scroll-to-error="true" class="form-container">
+                            <van-form :ref="'formAddCommentRef'" class="form-container">
                                 <van-cell-group>
                                     <van-field center :error-message="error.content.get('addComment-'+state.topicId)">
                                         <template #input>
-                                            <div style="width: 100%;">
+                                            <div v-show="!state.isAddCommentMarkdown" style="width: 100%;">
                                                 <van-sticky :z-index="1" >
                                                     <div ref="addCommentContentEditorToolbarRef" class="editor-toolbar" style="padding-top: 13px;"></div>
                                                 </van-sticky>
-                                                <div ref="addCommentContentEditorTextRef"  class="editor-text" style="min-height: 320px;"></div>
+                                                <div ref="addCommentContentEditorTextRef" :editorId="'addComment'" class="editor-text" style="min-height: 320px;"></div>
+                                            </div>
+                                            <div v-if="state.isAddCommentMarkdown" style="width: 100%;" >
+                                                <Editor mode="tab" :editorId="'addComment'" :value="state.addCommentMarkdownContent" :plugins="state.addCommentEditorPlugin" :locale="zhHans" :sanitize="commentSanitize" placeholder="请输入内容..." @change="handleAddCommentMarkdownChange"/>
                                             </div>
                                         </template>
                                     </van-field>
@@ -295,7 +298,7 @@
                                         <RenderTemplate  :html="state.quoteData.get(comment.id)"></RenderTemplate>
                                     </div>
                                     
-                                    <div class="commentContent">
+                                    <div :class="[comment.isMarkdown != null && comment.isMarkdown == true ? 'markdown-body-custom commentMarkdownContent' : 'commentContent']">
                                         <div class="cancelAccount" v-if="comment.account == null || comment.account == ''">此用户账号已注销</div>
                                     
 
@@ -471,17 +474,20 @@
                                         </div>
                                     </van-popup>
                                     <!-- 引用评论 -->
-                                    <van-popup v-model:show="state.quoteFormView[comment.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
-                                        <div class="quoteCommentModule">
+                                    <van-popup v-model:show="state.quoteFormView[comment.id]" :lock-scroll="false" @close="closeQuoteComment"  safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
+                                        <div :class="['quoteCommentModule','quoteCommentModule_lock_'+comment.id]">
                                             <div class="quoteBox"><span class="van-multi-ellipsis--l2">{{state.quoteCommentContent}}</span></div>
                                             <van-form :scroll-to-error="true" class="form-container">
                                                 <van-field center :error-message="error.content.get('addQuoteComment-'+comment.id)">
                                                     <template #input>
-                                                        <div style="width: 100%;">
+                                                        <div v-show="!state.isQuoteCommentMarkdownMap.get(comment.id)" style="width: 100%;">
                                                             <van-sticky :z-index="1" >
                                                                 <div :ref="'quoteCommentContentEditorToolbarRef_'+comment.id" class="editor-toolbar" style="padding-top: 13px;"></div>
                                                             </van-sticky>
-                                                            <div :ref="'quoteCommentContentEditorTextRef_'+comment.id"  class="editor-text" style="min-height: 320px;"></div>
+                                                            <div :ref="'quoteCommentContentEditorTextRef_'+comment.id" :editorId="'quoteComment_'+comment.id" class="editor-text" style="min-height: 320px;"></div>
+                                                        </div>
+                                                        <div v-if="state.isQuoteCommentMarkdownMap.get(comment.id)" style="width: 100%;">
+                                                            <Editor mode="tab" :editorId="'quoteComment_'+comment.id" :value="(state.quoteCommentMarkdownContent[comment.id] as string)" :plugins="state.quoteCommentEditorPlugin" :locale="zhHans" :sanitize="commentSanitize" placeholder="请输入内容..." @change="handleQuoteCommentMarkdownChange($event,comment.id)"/>
                                                         </div>
                                                     </template>
                                                 </van-field>
@@ -505,16 +511,19 @@
                                         </div>
                                     </van-popup>
                                     <!-- 修改评论 -->
-                                    <van-popup v-model:show="state.editCommentFormView[comment.id]" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
-                                        <div class="editCommentModule">
+                                    <van-popup v-model:show="state.editCommentFormView[comment.id]" :lock-scroll="false" @close="closeEditComment" safe-area-inset-bottom :close-on-popstate="true" position="bottom" closeable close-icon="close" :style="{ height: '100%' }">
+                                        <div :class="['editCommentModule','editCommentModule_lock_'+comment.id]">
                                             <van-form :scroll-to-error="true" class="form-container">
                                                 <van-field center :error-message="error.content.get('editComment-'+comment.id)">
                                                     <template #input>
-                                                        <div style="width: 100%;">
+                                                        <div style="width: 100%;" v-show="!state.isEditCommentMarkdownMap.get(comment.id)" >
                                                             <van-sticky :z-index="1" >
                                                                 <div :ref="'editCommentContentEditorToolbarRef_'+comment.id" class="editor-toolbar" style="padding-top: 13px;"></div>
                                                             </van-sticky>
-                                                            <div :ref="'editCommentContentEditorTextRef_'+comment.id"  class="editor-text" style="min-height: 320px;"></div>
+                                                            <div :ref="'editCommentContentEditorTextRef_'+comment.id" :editorId="'editComment_'+comment.id" class="editor-text" style="min-height: 320px;"></div>
+                                                        </div>
+                                                        <div v-if="state.isEditCommentMarkdownMap.get(comment.id)" style="width: 100%;">
+                                                            <Editor mode="tab" :editorId="'editComment_'+comment.id" :value="(state.editCommentMarkdownContent[comment.id] as string)" :plugins="state.editCommentEditorPlugin" :locale="zhHans" :sanitize="commentSanitize" placeholder="请输入内容..." @change="handleEditCommentMarkdownChange($event,comment.id)"/>
                                                         </div>
                                                     </template>
                                                 </van-field>
@@ -645,7 +654,7 @@
     import { AxiosResponse } from 'axios'
     import { PageView,Topic,Comment, Reply, GiveRedEnvelope, ReceiveRedEnvelope, ReportType } from "@/types/index";
     import { letterAvatar } from '@/utils/letterAvatar';
-    import { escapeHtml, escapeVueHtml } from '@/utils/escape';
+    import { escapeHtml, escapeVueHtml, unescapeHtml } from '@/utils/escape';
     import Hls from 'hls.js';
     import DPlayer from 'dplayer';
     import { getLanguageClassName, getPageBasePath, processErrorInfo } from '@/utils/tool';
@@ -654,7 +663,23 @@
     import Icon from "@/components/icon/Icon.vue";
     import { createEditor, destroyEditor } from '@/utils/editor';
     import { createJumpAttribute } from '@/utils/jumpProcess';
-    import { nativeQueryVideoRedirect, nativeRefreshToken } from '@/utils/http';
+    import { nativeDownloadRedirect, nativeQueryVideoRedirect, nativeRefreshToken } from '@/utils/http';
+    import { markdownPlugins,markdownEditorConfig,sanitize, markdownToHtml } from '@/utils/markdownEditor';
+    import { toggleEditor } from '@/utils/markdownPlugin/plugin-toggle-editor';
+    import { help } from '@/utils/markdownPlugin/plugin-help';
+    import { emoji } from '@/utils/markdownPlugin/plugin-emoji';
+    import { imageUpload } from '@/utils/markdownPlugin/plugin-image-upload';
+    import { pasteImageUpload } from '@/utils/markdownPlugin/plugin-paste-image';
+    import { fileUpload } from '@/utils/markdownPlugin/plugin-file-upload';
+    import { videoUpload } from '@/utils/markdownPlugin/plugin-video-upload';
+    import { hideContent } from '@/utils/markdownPlugin/plugin-hide-content';
+    import type { BytemdPlugin } from 'bytemd'
+    import { Editor } from '@bytemd/vue-next'
+    import zhHans from 'bytemd/locales/zh_Hans.json'
+    import { clearBodyLocks, lock, unlock } from 'tua-body-scroll-lock'
+    import mermaid from "mermaid";
+    import katex from 'katex'
+    import 'katex/dist/katex.css'   
 
     const { proxy } = getCurrentInstance() as ComponentInternalInstance;
     const store = useStore(pinia);
@@ -722,12 +747,15 @@
         
         replyExpandOrShrink :new Map(), //回复展开/收缩 map格式 key:评论Id value:是否展开
         allowComment:false,//是否显示评论表单
-        availableTag:[],//评论编辑器允许使用标签
+        availableTag:[] as Array<string>,//评论编辑器允许使用标签
         fileSystem:0,//文件存储系统
+        supportEditor:10,//支持编辑器
 
         popup_addComment:false,//添加评论弹出窗口
         addCommentEditor :{} as any,//添加评论编辑器
         addCommentEditorCreateParameObject :{} as any,//添加评论编辑器的创建参数
+        addCommentMarkdownContent:'',//markdown评论内容
+        isAddCommentMarkdown:false,//是否使用markdown评论编辑器
 
         quoteCommentContent : '',//引用评论内容
         quoteFormView : {} as any,//评论引用表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
@@ -735,9 +763,17 @@
         quoteEditorCreateParameMap:new Map(),//引用评论编辑器的创建参数 key:评论Id value:编辑器参数对象
         quoteData : new Map(),//引用数据 map格式 key:评论Id value:引用html数据
         
+        isQuoteCommentMarkdownMap: new Map(),//引用评论是否使用markdown编辑器  key:评论Id value:是否为markdown编辑器
+        quoteCommentMarkdownContent : {} as any,//引用评论markdown编辑内容 key:评论Id value:评论内容
+        
+
         editCommentFormView : {} as any,//修改评论表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
         editCommentEditorMap:new Map(),//修改评论富文本编辑器集合 key:评论Id value:富文本编辑器
         editCommentEditorCreateParameMap:new Map(),//修改评论编辑器的创建参数 key:评论Id value:编辑器参数对象
+
+        isEditCommentMarkdownMap: new Map(),//修改评论是否使用markdown编辑器  key:评论Id value:是否为markdown编辑器
+        editCommentMarkdownContent : {} as any,//修改评论markdown编辑内容 key:评论Id value:评论内容
+
 
         addReplyContentField : [] as any, //添加回复内容项绑定
 		addReplyFormView : {} as any,//添加回复表单  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
@@ -781,6 +817,10 @@
 		addReplyFriendFormView : {} as any,//添加回复对方表单  key:回复Id value:是否显示 {回复Id-1 : 是否显示,回复Id-2 : 是否显示}
         line : new Map(),//楼中楼的线  key:回复Id value:是否显示
         dot : new Map(),//楼中楼的点  key:回复Id value:是否显示
+
+        addCommentEditorPlugin:[] as BytemdPlugin[],//添加评论Markdown编辑器插件
+        quoteCommentEditorPlugin:[] as BytemdPlugin[],//引用评论Markdown编辑器插件
+        editCommentEditorPlugin:[] as BytemdPlugin[],//修改评论Markdown编辑器插件
     });
 
     
@@ -832,10 +872,13 @@
         state.allowComment = false;//是否显示评论表单
         state.availableTag.length = 0;//评论编辑器允许使用标签
         state.fileSystem = 0;//文件存储系统
+        state.supportEditor=10;//支持编辑器
 
         state.popup_addComment = false;//添加评论弹出窗口
         state.addCommentEditor = {} as any;//添加评论编辑器
         state.addCommentEditorCreateParameObject = {} as any;//添加评论编辑器的创建参数
+        state.addCommentMarkdownContent='';//markdown评论内容
+        state.isAddCommentMarkdown=false;//是否使用markdown评论编辑器
 
         state.quoteCommentContent = '';//引用评论内容
         state.quoteFormView = {} as any;//评论引用表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
@@ -843,9 +886,15 @@
         state.quoteEditorCreateParameMap.clear();//引用评论编辑器的创建参数 key:评论Id value:编辑器参数对象
         state.quoteData.clear();//引用数据 map格式 key:评论Id value:引用html数据
         
+        state.isQuoteCommentMarkdownMap.clear();//引用评论是否使用markdown编辑器  key:评论Id value:是否为markdown编辑器
+        state.quoteCommentMarkdownContent = {} as any;//引用评论markdown编辑内容 key:评论Id value:评论内容
+
         state.editCommentFormView = {} as any;//修改评论表单  key:评论Id value:是否显示  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
         state.editCommentEditorMap.clear();//修改评论富文本编辑器集合 key:评论Id value:富文本编辑器
         state.editCommentEditorCreateParameMap.clear();//修改评论编辑器的创建参数 key:评论Id value:编辑器参数对象
+
+        state.isEditCommentMarkdownMap.clear();//修改评论是否使用markdown编辑器  key:评论Id value:是否为markdown编辑器
+        state.editCommentMarkdownContent = {} as any;//修改评论markdown编辑内容 key:评论Id value:评论内容
 
         state.addReplyContentField.length = 0; //添加回复内容项绑定
 		state.addReplyFormView = {} as any;//添加回复表单  key:评论Id value:是否显示  {评论Id-1 : 是否显示,评论Id-2 : 是否显示}
@@ -868,7 +917,11 @@
         state.line.clear();//楼中楼的线  key:回复Id value:是否显示
         state.dot.clear();//楼中楼的点  key:回复Id value:是否显示
 
-         
+        state.addCommentEditorPlugin.length = 0;//添加评论Markdown编辑器插件
+        state.quoteCommentEditorPlugin.length = 0;//引用评论Markdown编辑器插件
+        state.editCommentEditorPlugin.length = 0;//修改评论Markdown编辑器插件
+
+
         state.isError = false;//是否列表数据加载失败
         state.isFinished = false; 
 
@@ -889,6 +942,106 @@
         imageFile:'',//举报图片
         report:''//举报
     })
+
+
+    //处理添加评论Markdown
+    const handleAddCommentMarkdownChange = (value: string) => {
+        state.addCommentMarkdownContent = value;
+    }
+
+    //评论白名单
+    const commentSanitize = (schema: any) => {
+        schema = sanitize(schema);
+        return schema;
+    }
+
+
+     //处理切换到富文本编辑器
+     const handleAddCommentToggleRichtextEditor = (editorId: string) => {
+        state.isAddCommentMarkdown = false;
+        nextTick(()=>{
+            if (Object.keys(state.addCommentEditorCreateParameObject).length != 0) {//不等于空
+                //创建富文本编辑器
+                state.addCommentEditor = createEditor(
+                    state.addCommentEditorCreateParameObject.toolbarRef,
+                    state.addCommentEditorCreateParameObject.textRef,
+                    state.addCommentEditorCreateParameObject.editorIconList, 
+                    getPageBasePath()+'common/default/', 
+                    state.addCommentEditorCreateParameObject.uploadPath, 
+                    state.addCommentEditorCreateParameObject.userGradeList,
+                    state.fileSystem,
+                    (editorId: string)=>{
+                        handleAddCommentToggleMarkdownEditor(editorId);
+                    }
+                );
+            }
+        })
+    }
+
+    //处理添加评论切换到Markdown编辑器
+    const handleAddCommentToggleMarkdownEditor = (editorId: string) => {
+        if (Object.keys(state.addCommentEditor).length != 0) {//不等于空
+            destroyEditor(state.addCommentEditor);
+            state.addCommentEditor = {};
+        }
+        state.isAddCommentMarkdown = true;
+    }
+
+
+    //处理引用评论Markdown
+    const handleQuoteCommentMarkdownChange = (value: string, commentId: string) => {
+       Object.assign(state.quoteCommentMarkdownContent, {[commentId] : value});
+    }
+
+
+    //处理引用评论切换到富文本编辑器
+    const handleQuoteCommentToggleRichtextEditor = (editorId: string) => {
+        let commentId = editorId.split("_")[1];
+        state.isQuoteCommentMarkdownMap.set(commentId,false);
+
+        nextTick(()=>{
+            
+            let quoteEditorCreateParameObject = state.quoteEditorCreateParameMap.get(commentId);
+          
+            if (quoteEditorCreateParameObject !=undefined && Object.keys(quoteEditorCreateParameObject).length != 0) {//不等于空
+                
+                //创建富文本编辑器
+                let quoteCommentEditor = createEditor(
+                    quoteEditorCreateParameObject.toolbarRef,
+                    quoteEditorCreateParameObject.textRef,
+                    quoteEditorCreateParameObject.editorIconList, 
+                    getPageBasePath()+'common/default/', 
+                    quoteEditorCreateParameObject.uploadPath, 
+                    quoteEditorCreateParameObject.userGradeList,
+                    state.fileSystem,
+                    (editorId: string)=>{
+                        handleQuoteCommentToggleMarkdownEditor(editorId);
+                    }
+                );
+                state.quoteEditorMap.set(commentId, quoteCommentEditor);
+            }
+        })
+    }
+
+    //处理引用评论切换到Markdown编辑器
+    const handleQuoteCommentToggleMarkdownEditor = (editorId: string) => {
+        let commentId = editorId.split("_")[1];
+
+        let quoteEditor = state.quoteEditorMap.get(commentId);
+        if (quoteEditor !=undefined && Object.keys(quoteEditor).length != 0) {//不等于空
+            destroyEditor(quoteEditor);
+            quoteEditor = {};
+        }
+
+        state.isQuoteCommentMarkdownMap.set(commentId,true);                
+    }
+
+
+    //处理修改评论Markdown
+    const handleEditCommentMarkdownChange = (value: string, commentId: string) => {
+       Object.assign(state.editCommentMarkdownContent, {[commentId] : value});
+    }
+
 
     
     //加载列表
@@ -1548,6 +1701,30 @@
         });
     }
 
+    //文件下载
+    const onDownload = (href: string) => {
+        let regx = new RegExp("^"+store.apiUrl,"i");//忽略大小写
+        let path = href.replace(regx,"")
+
+        proxy?.$axios({
+            url: '/'+path,
+            method: 'get',
+            params:  {
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                const result: any = response.data;
+                if(JSON.parse(result.success)){
+                    location.href = result.redirect;
+                }
+            }
+        }).catch((error: any) =>{
+            console.log(error);
+        });
+    }
 
     //递归绑定节点参数
     const bindNode = (node:any) => {
@@ -1664,54 +1841,139 @@
                     childNode.setAttribute("id",id);//设置Id
                     state.playerIdList.push(id);	
                 }
+                
+                //处理下载
+                if(childNode.nodeName.toLowerCase() == "a" ){
+                    let href = childNode.getAttribute("href")
+                    let title = childNode.getAttribute("title")
+                    let linkType = childNode.getAttribute("linkType")
+                    let startUrl = store.apiUrl+"fileDowload?jump=";
+                    if(linkType == "download" && href != ""){
+                        let downloadHtml = "";
+                        if(href.toLowerCase().startsWith(startUrl.toLowerCase())){
+                            downloadHtml ='<span class="download" @click="onDownload_renderTemplate(`'+href+'`);"><Icon name="download-2-line" size="24px" class="link-icon"></Icon>'+escapeHtml(title)+'</span>';
+                          
+                        }else{
+                            downloadHtml ='<a class="download" href="'+href+'"><Icon name="download-2-line" size="24px" class="link-icon"></Icon>'+escapeHtml(title)+'</a>';
+                        }
+                        let downloadDom = document.createElement('div');
+                        downloadDom.innerHTML=downloadHtml;
 
+                        childNode.replaceWith(downloadDom.firstElementChild);
+                    }
+                }
                 
                 //处理代码标签
                 if(childNode.nodeName.toLowerCase() == "pre" ){
-                    let pre_html = childNode.innerHTML;
-                    let class_val = childNode.className;
-                    let lan_class = "";
+
                     
-                    let class_arr = new Array();
-                    class_arr = class_val.split(' ');
+                    let firstChildNode = null;//第一个子节点
+
+                    for(let p = 0;p < childNode.childNodes.length;p++){
+                        let preChildNode = childNode.childNodes[p];
+                        if(preChildNode.nodeName.toLowerCase() == "code" ){
+                            firstChildNode = preChildNode;
+                            break;
+                        }
+                    }
                     
-                    for(let k=0; k<class_arr.length; k++){
-                        let className = class_arr[k].trim();
+                    if(firstChildNode != null && firstChildNode.getAttribute("class")!= null && firstChildNode.getAttribute("class").indexOf("language-") != -1){//Markdown代码
                         
-                        if(className != null && className != ""){
-                            if (className.lastIndexOf('lang-', 0) === 0) {
-                                lan_class = className;
-                                break;
+                        let class_val = firstChildNode.className;
+                        let lan_class = "";
+                        let class_arr = new Array();
+                        class_arr = class_val.split(' ');
+                        
+                        for(let k=0; k<class_arr.length; k++){
+                            let className = class_arr[k].trim();
+                            
+                            if(className != null && className != ""){
+                                if (className.lastIndexOf('language-', 0) === 0) {
+                                    lan_class = className;
+                                    break;
+                                }
                             }
                         }
+                        if(firstChildNode.getAttribute("class").indexOf("language-mermaid") == -1){
+                            childNode.className = "line-numbers "+lan_class;
+                            childNode.setAttribute("data-prismjs-copy","复制");
+                            childNode.setAttribute("data-prismjs-copy-error","按Ctrl+C复制");
+                            childNode.setAttribute("data-prismjs-copy-success","复制成功");
+
+
+                            let nodeHtml = "";
+
+                            //删除code节点
+                            let preChildNodeList = childNode.childNodes;
+                            for(let p = 0;p < preChildNodeList.length;p++){
+                                let preChildNode = preChildNodeList[p];
+                                if(preChildNode.nodeName.toLowerCase() == "code" ){
+                                    nodeHtml += preChildNode.innerHTML;
+                                    preChildNode.parentNode.removeChild(preChildNode);
+                                }
+                                
+                            }
+                            
+                            let dom = document.createElement('code');
+                            dom.className = "line-numbers "+lan_class;
+                            dom.innerHTML=nodeHtml;
+                            
+                        
+                            childNode.appendChild(dom);
+                        }
                     }
-                    
-                    childNode.className = "line-numbers "+getLanguageClassName(lan_class);
-                    childNode.setAttribute("data-prismjs-copy","复制");
-                    childNode.setAttribute("data-prismjs-copy-error","按Ctrl+C复制");
-                    childNode.setAttribute("data-prismjs-copy-success","复制成功");
 
 
-                    let nodeHtml = "";
-
-                    //删除code节点
-                    let preChildNodeList = childNode.childNodes;
-                    for(let p = 0;p < preChildNodeList.length;p++){
-                        let preChildNode = preChildNodeList[p];
-                        if(preChildNode.nodeName.toLowerCase() == "code" ){
-                            nodeHtml += preChildNode.innerHTML;
-                            preChildNode.parentNode.removeChild(preChildNode);
+                    if(childNode.className != null && childNode.className.indexOf("lang-") != -1){//富文本编辑器代码
+                       
+                        let pre_html = childNode.innerHTML;
+                        let class_val = childNode.className;
+                        let lan_class = "";
+                        
+                        let class_arr = new Array();
+                        class_arr = class_val.split(' ');
+                        
+                        for(let k=0; k<class_arr.length; k++){
+                            let className = class_arr[k].trim();
+                            
+                            if(className != null && className != ""){
+                                if (className.lastIndexOf('lang-', 0) === 0) {
+                                    lan_class = className;
+                                    break;
+                                }
+                            }
                         }
                         
+                        childNode.className = "line-numbers "+getLanguageClassName(lan_class);
+                        childNode.setAttribute("data-prismjs-copy","复制");
+                        childNode.setAttribute("data-prismjs-copy-error","按Ctrl+C复制");
+                        childNode.setAttribute("data-prismjs-copy-success","复制成功");
+
+
+                        let nodeHtml = "";
+
+                        //删除code节点
+                        let preChildNodeList = childNode.childNodes;
+                        for(let p = 0;p < preChildNodeList.length;p++){
+                            let preChildNode = preChildNodeList[p];
+                            if(preChildNode.nodeName.toLowerCase() == "code" ){
+                                nodeHtml += preChildNode.innerHTML;
+                                preChildNode.parentNode.removeChild(preChildNode);
+                            }
+                            
+                        }
+                        
+                        let dom = document.createElement('code');
+                        dom.className = "line-numbers "+getLanguageClassName(lan_class);
+                        dom.innerHTML=nodeHtml;
+                        
+                    
+                        childNode.appendChild(dom);
                     }
-                    
-                    let dom = document.createElement('code');
-                    dom.className = "line-numbers "+getLanguageClassName(lan_class);
-                    dom.innerHTML=nodeHtml;
+
                     
                     
-                    childNode.appendChild(dom);
-                
+                   
                 }
                 
                 bindNode(childNode);
@@ -1735,8 +1997,67 @@
             if(childNode.nodeType == 1){
                 //处理代码标签
                 if(childNode.nodeName.toLowerCase() == "pre" ){
+                    let firstChildNode:any = null;//第一个子节点
+                    for(let p = 0;p < childNode.childNodes.length;p++){
+                        let preChildNode = childNode.childNodes[p];
+                        if(preChildNode.nodeName.toLowerCase() == "code" ){
+                            firstChildNode = preChildNode;
+                            break;
+                        }
+                    }
+                   
+                    if(firstChildNode != null && firstChildNode.getAttribute("class")!= null){
+                        if(firstChildNode.getAttribute("class") != null && firstChildNode.getAttribute("class").indexOf("language-mermaid") != -1){
+                           
+                            if(firstChildNode.innerHTML){
+                                  //  const { svg } = await mermaid.render('mermaid_'+random, unescapeHtml(firstChildNode.innerHTML));
+
+                              //  childNode.innerHTML = svg;
+
+                              const mermaid_container = document.createElement('div')
+                                mermaid_container.style.lineHeight = 'initial' //重置行高
+
+                                childNode.replaceWith(mermaid_container);
+                                mermaid.render(
+                                    'mermaid_'+random,
+                                    unescapeHtml(firstChildNode.innerHTML),
+                                    // @ts-ignore
+                                    mermaid_container
+                                ).then((svgCode) => {
+                                    // @ts-ignore
+                                    mermaid_container.innerHTML = svgCode.svg
+                                
+                                })
+                                .catch((err) => {
+                                // console.error(err);
+                                })
+                            }
+                        }else if(firstChildNode.getAttribute("class").indexOf("language-mermaid") != -1){
+                            
+                        }else{
+                            Prism.highlightAllUnder(childNode);
+                        }
+                    }
+                   
                     
-                    Prism.highlightAllUnder(childNode);
+                   
+                }else if(childNode.nodeName.toLowerCase() == "span"){
+                    if(childNode.getAttribute("class") != null && childNode.getAttribute("class").indexOf("math-inline") != -1 && childNode.childNodes.length==1 && childNode.childNodes[0].nodeType ==3){
+                        let tex = katex.renderToString(unescapeHtml(childNode.innerHTML), {
+                            throwOnError: false,
+                            displayMode:false//内联模式
+                        });
+                        childNode.innerHTML = tex;
+                    }
+                }else if(childNode.nodeName.toLowerCase() == "div"){
+                    if(childNode.getAttribute("class") != null && childNode.getAttribute("class").indexOf("math-display") != -1 && childNode.childNodes.length==1 && childNode.childNodes[0].nodeType ==3){
+                        let tex = katex.renderToString(unescapeHtml(childNode.innerHTML), {
+                            throwOnError: false,
+                            displayMode:true//块模式
+                        });
+                        childNode.innerHTML = tex;
+
+                    }
                 }
                 renderBindNode(childNode);
             }
@@ -2100,29 +2421,43 @@
     const addCommentUI = () => {
         state.popup_addComment = true;
  
+        //锁定滚动层
+        lock(document.querySelector('.addCommentModule') as any)
+        document.querySelector('body')!.style.setProperty('position', 'sticky')//移除tua-body-scroll-lock锁定层时添加在body上的position: fixed属性,此属性会导致ByteMD编辑器不能选择行
+ 
+
+
         nextTick(()=>{
             if(state.showCaptcha.get("addComment-"+state.topicId)){
                 replaceCaptcha("addComment-"+state.topicId);//刷新验证码
             }
             
             if (Object.keys(state.addCommentEditorCreateParameObject).length > 0 && Object.keys(state.addCommentEditor).length == 0) {
-            
-                //创建富文本编辑器
-                state.addCommentEditor = createEditor(
-                    addCommentContentEditorToolbarRef.value,
-                    addCommentContentEditorTextRef.value,
-                    state.addCommentEditorCreateParameObject.editorIconList, 
-                    getPageBasePath()+'common/default/', 
-                    state.addCommentEditorCreateParameObject.uploadPath, 
-                    null,
-                    state.fileSystem
-                );
-
+                if(!state.isAddCommentMarkdown){
+                    //创建富文本编辑器
+                    state.addCommentEditor = createEditor(
+                        addCommentContentEditorToolbarRef.value,
+                        addCommentContentEditorTextRef.value,
+                        state.addCommentEditorCreateParameObject.editorIconList, 
+                        getPageBasePath()+'common/default/', 
+                        state.addCommentEditorCreateParameObject.uploadPath, 
+                        null,
+                        state.fileSystem,
+                        (editorId: string)=>{
+                            handleAddCommentToggleMarkdownEditor(editorId);
+                        }
+                    );
+                }
                 state.addCommentEditorCreateParameObject.toolbarRef = addCommentContentEditorToolbarRef.value;
                 state.addCommentEditorCreateParameObject.textRef = addCommentContentEditorTextRef.value;              
             }
         
         })
+    }
+    
+    //关闭添加评论页
+    const closeAddComment = () => {
+        clearBodyLocks()//关闭锁定的滚动层
     }
     //查询添加评论页
     const queryAddComment = (topicId:string) => {
@@ -2148,7 +2483,9 @@
                         let editorIconList = new Array();
                         if(data.availableTag != null && data.availableTag != ''){
                             let availableTagObject = JSON.parse(data.availableTag);//JSON转为对象
-
+                            if(data.supportEditor == 30 || data.supportEditor == 40){
+                                availableTagObject.push("toggleEditor");
+                            }
                             if(availableTagObject != null && availableTagObject.length >0){
                                 for(let i=0; i<availableTagObject.length; i++){
                                     let _availableTag = availableTagObject[i];
@@ -2173,15 +2510,49 @@
                                         editorIconList.push("image");
                                     }else if(_availableTag == "insertfile"){//文件
                                         editorIconList.push("file");
+                                    }else if(_availableTag == "toggleEditor"){//切换编辑器
+                                        editorIconList.push("toggleEditor");
                                     }
                                 }
                             }
-
+                           
                             state.availableTag = availableTagObject;//话题编辑器允许使用标签
                         }
                         
                         state.fileSystem = data.fileSystem;//文件存储系统
+                        state.supportEditor = data.supportEditor;//支持编辑器 10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                        
+                        if(state.addCommentEditorPlugin != null && state.addCommentEditorPlugin.length ==0){
+                            //添加插件
+                            state.addCommentEditorPlugin.push(...markdownPlugins);
 
+                            if(state.supportEditor == 30 || state.supportEditor == 40){//10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                                state.addCommentEditorPlugin.push(
+                                    toggleEditor((editorId: string)=>{handleAddCommentToggleRichtextEditor(editorId)})
+                                );
+                            }
+
+                            if(editorIconList?.indexOf('image') != -1){
+                                state.addCommentEditorPlugin.push(
+                                    imageUpload("user/control/comment/uploadImage?topicId="+state.topicId,'file',state.fileSystem)
+                                );
+                                state.addCommentEditorPlugin.push(
+                                    pasteImageUpload("user/control/comment/uploadImage?topicId="+state.topicId,'file',state.fileSystem)
+                                );
+                            }  
+
+                            state.addCommentEditorPlugin.push(emoji());
+                            
+                            state.addCommentEditorPlugin.push(
+                                help(editorIconList,[])
+                            );
+                              
+                            
+                        }
+
+                        if(data.supportEditor == 20 || data.supportEditor == 40){
+                            state.isAddCommentMarkdown = true;
+                        }
 
                         if (data.captchaKey != undefined && data.captchaKey != '') {
                             
@@ -2255,9 +2626,16 @@
                 formData.append('topicId', state.topicId);
 
                 
-                let content =  state.addCommentEditor.txt.html()
-                if(content != null && content !=''){
-                    formData.append('content', content);
+                
+
+                if(state.isAddCommentMarkdown){
+                    formData.append('isMarkdown', state.isAddCommentMarkdown.toString());
+                    formData.append('markdownContent', state.addCommentMarkdownContent);
+                }else{
+                    let content =  state.addCommentEditor.txt.html()
+                    if(content != null && content !=''){
+                        formData.append('content', content);
+                    }
                 }
 
                 
@@ -2290,13 +2668,23 @@
                                     
                                 } 
                             });
+                            //关闭添加评论页
+                            closeAddComment()
+
                             state.popup_addComment = false;
 
-                            //清空字段
-                            state.addCommentEditor.txt.clear();//清空
-                            //destroyEditor(state.addCommentEditor);
-                            //state.addCommentEditor.remove();
-                            //state.addCommentEditorCreateParameObject = {};
+
+                            state.addCommentMarkdownContent = "";
+                            if (Object.keys(state.addCommentEditor).length != 0) {//不等于空
+                               //清空字段
+                                state.addCommentEditor.txt.clear();//清空
+                                //destroyEditor(state.addCommentEditor);
+                                //state.addCommentEditor.remove();
+                                //state.addCommentEditorCreateParameObject = {};
+                            }
+
+
+                            
 
                             if(state.showCaptcha.get(_key) == true){
                                 Object.assign(state.captchaValue, {[_key] : ''});
@@ -2381,13 +2769,19 @@
                     Object.assign(state.quoteFormView, {[comment.id] : true});
 
                     nextTick(()=>{
+                        //锁定滚动层
+                        lock(document.querySelector('.quoteCommentModule_lock_'+comment.id) as any)
+                        document.querySelector('body')!.style.setProperty('position', 'sticky')//移除tua-body-scroll-lock锁定层时添加在body上的position: fixed属性,此属性会导致ByteMD编辑器不能选择行
+                
                 
 
                         //编辑器图标
                         let editorIconList = new Array();
                         if(data.availableTag != null && data.availableTag != ''){
                             let availableTagObject = JSON.parse(data.availableTag);//JSON转为对象
-
+                            if(data.supportEditor == 30 || data.supportEditor == 40){
+                                availableTagObject.push("toggleEditor");
+                            }
                             if(availableTagObject != null && availableTagObject.length >0){
                                 for(let i=0; i<availableTagObject.length; i++){
                                     let _availableTag = availableTagObject[i];
@@ -2412,14 +2806,45 @@
                                         editorIconList.push("image");
                                     }else if(_availableTag == "insertfile"){//文件
                                         editorIconList.push("file");
+                                    }else if(_availableTag == "toggleEditor"){//切换编辑器
+                                        editorIconList.push("toggleEditor");
+                                    }else if(_availableTag == "toggleEditor"){//切换编辑器
+                                        editorIconList.push("toggleEditor");
                                     }
                                 }
                             }
+                            
                         }
 
                         
                         state.fileSystem = data.fileSystem;//文件存储系统
-                       
+                        state.supportEditor = data.supportEditor;//支持编辑器 10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                        
+                        if(state.quoteCommentEditorPlugin != null && state.quoteCommentEditorPlugin.length ==0){
+                            //添加插件
+                            state.quoteCommentEditorPlugin.push(...markdownPlugins);
+                           
+                            if(state.supportEditor == 30 || state.supportEditor == 40){//10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                                state.quoteCommentEditorPlugin.push(
+                                    toggleEditor((editorId: string)=>{handleQuoteCommentToggleRichtextEditor(editorId)})
+                                );
+                            }
+                           
+                            if(editorIconList?.indexOf('image') != -1){
+                                state.quoteCommentEditorPlugin.push(
+                                    imageUpload("user/control/comment/uploadImage?topicId="+state.topicId,'file',state.fileSystem)
+                                );
+                                state.quoteCommentEditorPlugin.push(
+                                    pasteImageUpload("user/control/comment/uploadImage?topicId="+state.topicId,'file',state.fileSystem)
+                                );
+                            }  
+                            state.quoteCommentEditorPlugin.push(emoji());
+                            state.quoteCommentEditorPlugin.push(
+                                help(editorIconList,[])
+                            );
+                        }
+
+
 
                         if (data.captchaKey != undefined && data.captchaKey != '') {
                             
@@ -2432,21 +2857,32 @@
                         if (state.quoteEditorCreateParameMap.get(comment.id) == null || Object.keys(state.quoteEditorCreateParameMap.get(comment.id)).length === 0) {//等于空
                             let uploadPath = "user/control/comment/uploadImage?topicId="+state.topicId;
                     
-                                                                                      
+                                                    
                             let quoteCommentContentEditorToolbarRefValue = (proxy?.$refs['quoteCommentContentEditorToolbarRef_'+comment.id] as any)[0];
                             let quoteCommentContentEditorTextRefValue = (proxy?.$refs['quoteCommentContentEditorTextRef_'+comment.id] as any)[0];
                             
-                            //创建富文本编辑器
-                            let editor = createEditor(
-                                quoteCommentContentEditorToolbarRefValue,
-                                quoteCommentContentEditorTextRefValue,
-                                editorIconList, 
-                                getPageBasePath()+'common/default/', 
-                                uploadPath, 
-                                null,
-                                state.fileSystem
-                            );
-                            state.quoteEditorMap.set(comment.id,editor);
+                            if(data.supportEditor == 20 || data.supportEditor == 40){
+                                state.isQuoteCommentMarkdownMap.set(comment.id,true);
+                            }else{
+                                state.isQuoteCommentMarkdownMap.set(comment.id,false);
+                            }
+
+                            if(!state.isQuoteCommentMarkdownMap.get(comment.id)){
+                                 //创建富文本编辑器
+                                let editor = createEditor(
+                                    quoteCommentContentEditorToolbarRefValue,
+                                    quoteCommentContentEditorTextRefValue,
+                                    editorIconList, 
+                                    getPageBasePath()+'common/default/', 
+                                    uploadPath, 
+                                    null,
+                                    state.fileSystem,
+                                    (editorId: string)=>{
+                                        handleQuoteCommentToggleMarkdownEditor(editorId);
+                                    }
+                                );
+                                state.quoteEditorMap.set(comment.id,editor);
+                            }
 
                             state.quoteEditorCreateParameMap.set(comment.id, {
                                     toolbarRef:quoteCommentContentEditorToolbarRefValue,
@@ -2476,7 +2912,10 @@
             console.log(error);
         });
     }
-
+    //关闭引用评论页
+    const closeQuoteComment = () => {
+        clearBodyLocks()//关闭锁定的滚动层
+    }
     
     //引用评论 -- 提交数据
     const onQuoteCommentFormSubmit = (commentId:string) => {
@@ -2516,13 +2955,22 @@
                 formData.append('commentId', commentId);
 
 
-                let quoteEditor = state.quoteEditorMap.get(commentId);
-                if(quoteEditor != null){
-                    let content =  quoteEditor.txt.html()
-                    if(content != null && content !=''){
-                        formData.append('content', content);
+                if(state.isQuoteCommentMarkdownMap.get(commentId)!= undefined && state.isQuoteCommentMarkdownMap.get(commentId) == true){
+                    formData.append('isMarkdown', state.isQuoteCommentMarkdownMap.get(commentId).toString());
+                    if(state.quoteCommentMarkdownContent[commentId] != undefined){
+                        formData.append('markdownContent', state.quoteCommentMarkdownContent[commentId]);
+                    }
+                }else{
+                    let quoteEditor = state.quoteEditorMap.get(commentId);
+                    if(quoteEditor != null){
+                        let content =  quoteEditor.txt.html()
+                        if(content != null && content !=''){
+                            formData.append('content', content);
+                        }
                     }
                 }
+
+                
                 
                 if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
                     //验证码Key
@@ -2553,14 +3001,26 @@
                                     
                                 } 
                             });
-                           
+                            closeQuoteComment();//关闭引用评论页
 
+
+                            let quoteEditor = state.quoteEditorMap.get(commentId);
                             if(quoteEditor != null){
                                 destroyEditor(quoteEditor);
                                 state.quoteEditorMap.delete(commentId);
                                 state.quoteEditorCreateParameMap.delete(commentId);
                             }
-                            Object.assign(state.quoteFormView, {[commentId] : false});
+
+                            if(state.quoteCommentMarkdownContent[commentId] != undefined){
+                               state.quoteCommentMarkdownContent[commentId] = ""
+                            }
+
+
+                            nextTick(()=>{//需要延迟才能让state.quoteCommentMarkdownContent[commentId]的设置生效
+                                Object.assign(state.quoteFormView, {[commentId] : false});
+                            })
+
+                           
 
                             //重置表单
                             //formAddCommentRef.value?.resetFields();
@@ -2573,6 +3033,8 @@
 
                             state.isLoading = true;//手动触发查询数据需将'加载状态结束'设为true
                             queryCommentList(state.topicId,'','',1);
+
+                           
 
                         }else{
                             //处理错误信息
@@ -2638,10 +3100,15 @@
             let _comment = data.comment;
 
             if(data.allowComment && _comment != undefined){
+                Object.assign(state.editCommentMarkdownContent, {[_comment.id] : _comment.markdownContent});
                 Object.assign(state.editCommentFormView, {[comment.id] : true});
 
                 nextTick(()=>{
-               
+                    //锁定滚动层
+                    lock(document.querySelector('.editCommentModule_lock_'+comment.id) as any)
+                    document.querySelector('body')!.style.setProperty('position', 'sticky')//移除tua-body-scroll-lock锁定层时添加在body上的position: fixed属性,此属性会导致ByteMD编辑器不能选择行
+                
+
 
                     //编辑器图标
                     let editorIconList = new Array();
@@ -2672,12 +3139,33 @@
                                     editorIconList.push("image");
                                 }else if(_availableTag == "insertfile"){//文件
                                     editorIconList.push("file");
+                                }else if(_availableTag == "toggleEditor"){//切换编辑器
+                                    editorIconList.push("toggleEditor");
                                 }
                             }
                         }
                     }
                     
                     state.fileSystem = data.fileSystem;//文件存储系统
+
+
+                    if(state.editCommentEditorPlugin != null && state.editCommentEditorPlugin.length ==0){
+                        //添加插件
+                        state.editCommentEditorPlugin.push(...markdownPlugins);
+                        if(editorIconList?.indexOf('image') != -1){
+                            state.editCommentEditorPlugin.push(
+                                imageUpload("user/control/comment/uploadImage?topicId="+state.topicId,'file',state.fileSystem)
+                            );
+                            state.editCommentEditorPlugin.push(
+                                pasteImageUpload("user/control/comment/uploadImage?topicId="+state.topicId,'file',state.fileSystem)
+                            );
+                        }   
+                        state.editCommentEditorPlugin.push(emoji());
+                        state.editCommentEditorPlugin.push(
+                            help(editorIconList,[])
+                        );
+                        
+                    }
 
 
                     if (data.captchaKey != undefined && data.captchaKey != '') {
@@ -2692,22 +3180,32 @@
                     if (state.editCommentEditorCreateParameMap.get(comment.id) == null || Object.keys(state.editCommentEditorCreateParameMap.get(comment.id)).length === 0) {//等于空
                         let uploadPath = "user/control/comment/uploadImage?topicId="+state.topicId;
                 
+                        if(_comment.isMarkdown != null && _comment.isMarkdown == true){
+                            state.isEditCommentMarkdownMap.set(comment.id,true);
+                        }else{
+                            state.isEditCommentMarkdownMap.set(comment.id,false);
+                        }
                                                                                     
                         let editCommentContentEditorToolbarRefValue = (proxy?.$refs['editCommentContentEditorToolbarRef_'+comment.id] as any)[0];
                         let editCommentContentEditorTextRefValue = (proxy?.$refs['editCommentContentEditorTextRef_'+comment.id] as any)[0];
                         
-                        //创建富文本编辑器
-                        let editor = createEditor(
-                            editCommentContentEditorToolbarRefValue,
-                            editCommentContentEditorTextRefValue,
-                            editorIconList, 
-                            getPageBasePath()+'common/default/', 
-                            uploadPath, 
-                            null,
-                            state.fileSystem
-                        );
-                        editor.txt.html(_comment.content);//初始化内容
-                        state.editCommentEditorMap.set(comment.id,editor);
+                        if(!state.isEditCommentMarkdownMap.get(comment.id)){
+                            //创建富文本编辑器
+                            let editor = createEditor(
+                                editCommentContentEditorToolbarRefValue,
+                                editCommentContentEditorTextRefValue,
+                                editorIconList, 
+                                getPageBasePath()+'common/default/', 
+                                uploadPath, 
+                                null,
+                                state.fileSystem,
+                                (editorId: string)=>{}
+                            );
+                            editor.txt.html(_comment.content);//初始化内容
+                            state.editCommentEditorMap.set(comment.id,editor);
+                        }
+
+                        
 
                         state.editCommentEditorCreateParameMap.set(comment.id, {
                                 toolbarRef:editCommentContentEditorToolbarRefValue,
@@ -2738,7 +3236,11 @@
             console.log(error);
         });
     }
-    
+    //关闭修改评论页
+    const closeEditComment = () => {
+        clearBodyLocks()//关闭锁定的滚动层
+    }
+
     //修改评论 -- 提交数据
     const onEditCommentFormSubmit = (commentId:string) => {
         let _key =  "editComment-"+commentId;
@@ -2777,14 +3279,22 @@
                 formData.append('commentId', commentId);
 
 
-                let editCommentEditor = state.editCommentEditorMap.get(commentId);
-                if(editCommentEditor != null){
-                    let content =  editCommentEditor.txt.html()
-                    if(content != null && content !=''){
-                        formData.append('content', content);
+                if(state.isEditCommentMarkdownMap.get(commentId)!= undefined && state.isEditCommentMarkdownMap.get(commentId) == true){
+                    if(state.editCommentMarkdownContent[commentId] != undefined){
+                        formData.append('markdownContent', state.editCommentMarkdownContent[commentId]);
                     }
+                }else{
+                    let editCommentEditor = state.editCommentEditorMap.get(commentId);
+                    if(editCommentEditor != null){
+                        let content =  editCommentEditor.txt.html()
+                        if(content != null && content !=''){
+                            formData.append('content', content);
+                        }
+                    }
+
                 }
 
+                
                 
                 if(state.captchaKey.get(_key) != undefined && state.captchaKey.get(_key) != null){
                     //验证码Key
@@ -2815,7 +3325,9 @@
                                     
                                 } 
                             });
-                           
+                            //关闭修改评论页
+                            closeEditComment();
+
 
                             let editCommentEditor = state.editCommentEditorMap.get(commentId);
                             if(editCommentEditor != null){
@@ -2823,7 +3335,19 @@
                                 state.editCommentEditorMap.delete(commentId);
                                 state.editCommentEditorCreateParameMap.delete(commentId);
                             }
-                            Object.assign(state.editCommentFormView, {[commentId] : false});
+
+                            if(state.editCommentMarkdownContent[commentId] != undefined){
+                               state.editCommentMarkdownContent[commentId] = ""
+                            }
+                           
+                            
+                            nextTick(()=>{//需要延迟才能让state.editCommentMarkdownContent[commentId]的设置生效
+                                Object.assign(state.editCommentFormView, {[commentId] : false});
+                            })
+
+
+
+                           
 
 
                             //重置表单
@@ -4646,6 +5170,276 @@
                 }
             }
         }
+        :deep(.topicMarkdownContent){
+            margin-left: 12px;
+            margin-right: 12px;
+            padding-bottom: 20px;
+            color:var(--van-gray-8);
+            font-size:16px; 
+            line-height:1.75; 
+            word-wrap:break-word;
+            min-height: 100px;
+            .cancelAccount{
+                display: inline-block;
+                vertical-align: middle;
+                padding: 6px 6px;
+                font-size: 14px;
+                line-height: 14px;
+                -webkit-border-radius: 2px;
+                -moz-border-radius: 2px;
+                border-radius: 2px;
+                color: var(--van-gray-5);
+                background-color: var(--van-gray-1);
+                margin-bottom: 6px;
+            }
+            .lastUpdateTime{
+                text-align: center;padding-top: 20px; padding-bottom: 20px;color: var(--van-gray-6);font-size: 15px;
+            }
+            //自动换行
+            pre{
+                white-space:pre-wrap;
+            }
+            
+            ol{
+                list-style: decimal;
+            }
+            ol li{
+                list-style-type:decimal;
+                list-style-position:inside;
+            }
+            ul{
+                list-style: disc;
+            }
+            // ul li{
+                //   list-style-type:disc;
+            //  }
+            .task-list-item {
+                list-style-type:none;
+            }
+            a{
+                color: var(--van-blue);
+                font-size:16px;
+            }
+            p{
+                font-size:16px;
+                word-wrap:break-word
+            }
+            img{
+                max-width:100%;height:auto;border:none;background:none;margin:0;padding:0; 
+                cursor: -webkit-zoom-in;
+                cursor: zoom-in;
+                vertical-align: sub;
+            }
+            code[class*="language-"]{
+                padding: 0 0;
+            }
+            .download{
+                color: #1890ff;
+                margin: 0 5px 0 5px;
+                cursor: pointer;
+                .link-icon {
+                    position: relative;
+                    top: 4px;
+                    margin-right: 2px;
+                    color:#1890ff;
+                    width: 20px; height: 20px;
+                }
+            }
+            /** 解决Chrome内核浏览器DPI缩放比例高于100%时部分边框变粗问题   本方案需删除table样式 border="1" bordercolor="#000000" */
+            table {
+                border-collapse: separate; 
+                border-spacing: 0; 
+                border-top: 1px solid var(--van-gray-3);
+                border-left: 1px solid var(--van-gray-3);
+                th {
+                    font-weight: 600
+                }
+                th, td {
+                    border-right: 1px solid var(--van-gray-3);
+                    border-bottom: 1px solid var(--van-gray-3);
+                    padding: 6px 13px
+                }
+                tr {
+                    background-color: #fff;
+                    border-top: 1px solid var(--van-gray-3);
+                    &:nth-child(2n) {
+                        background-color: var(--van-gray-1);
+                    }
+                }
+            }
+            ol{
+                li{ 
+                    list-style-type:decimal;
+                    list-style-position:inside;
+                }
+            }
+            ul{
+                li{ 
+                    margin-left:20px;
+                    list-style-type:disc;
+                }
+            }
+            iframe{
+                width:100%; height: 300px;padding:10px 0px; 
+            }
+            player{
+                width: 100%;
+                height: 576px;
+                display: block;
+                margin-top: 10px;
+                margin-bottom: 10px;
+                //关闭页面全屏按钮
+                .dplayer-full-in-icon{
+                    display: none !important;
+                }
+            }
+            .dplayer-process {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 10;
+                .box{
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    .prompt{
+                        width: 250px;
+                        height: 80px;
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        right: 0;
+                        bottom: 0;
+                        margin: 100px auto;
+                        padding :0px 30px;
+                        border-radius :3px;
+                        color: #fff;
+                        line-height: 80px;
+                        font-size: 20px;
+                        background-color:rgb(0,0,0);
+                        opacity:0.7;
+                        filter:alpha(opacity=70);
+                        text-align: center;
+                    }
+                }
+            }
+            
+            hide{
+                display:block;
+                background: var(--van-gray-1);
+                min-height:80px;
+                margin-top: 17px;
+                margin-bottom: 15px;
+                border: 3px dashed var(--van-gray-3);
+                border-radius: 5px;
+                .hide-box{
+                    margin: 20px;position: relative;text-align: center;
+                }
+                .background-image{
+                    margin: auto;
+                    color: var(--van-gray-4);
+                }
+                .background-prompt{
+                    margin-top: 5px; color: var(--van-gray-5);font-size: 16px;
+                }
+                .highlight{
+                    font-weight:bold;
+                }
+                .input-box{
+                    pointer-events: none;
+                    margin: auto; 
+                    margin-top: 10px;
+                    margin-bottom:25px; 
+                    border:var(--van-gray-7) solid 2px;
+                    width:226px; 
+                    height:26px; 
+                    // overflow:hidden; 
+                    border-radius: 2px;
+                    position: relative;
+                    &:hover{
+                        border:var(--van-gray-8) solid 2px;
+                        .button{
+                            border:transparent solid 0px; 
+                            background:var(--van-gray-8);
+                        }
+                    }
+                    .text{ 
+                        pointer-events:auto;
+                        width:145px; 
+                        height:26px; 
+                        line-height:26px; 
+                        border:0; 
+                        float:left; 
+                        font-size:14px; 
+                        color:var(--van-gray-8);
+                        text-indent: 6px; 
+                        vertical-align:middle;
+                        outline:none; 
+                        background: var(--van-gray-1);
+                    }
+                    .button{
+                        position: absolute;
+                        top: -1px;
+                        right: -2px;
+                        pointer-events:auto; 
+                        display: inline-block;
+                        white-space:nowrap;
+                        width:80px;
+                        height:28px; 
+                        vertical-align: middle;
+                        font-size: 15px;
+                        line-height: 28px;
+                        -webkit-border-radius: 0px 2px 2px 0px;
+                        -moz-border-radius: 0px 2px 2px 0px;
+                        border-radius: 0px 2px 2px 0px;
+                        color:#fff;
+                        background-color:var(--van-gray-7);
+                        cursor:pointer;
+                        user-select:none;
+                        &:hover{
+                            background:var(--van-gray-8);
+                        }
+                    }
+                }
+                .submit-box{
+                    margin-top: 10px;
+                    margin-bottom:5px; 
+                    display: inline-block;
+                    white-space:nowrap;
+                    width:80px;
+                    height:30px; 
+                    vertical-align: middle;
+                    font-size: 15px;
+                    line-height: 30px;
+                    -webkit-border-radius: 2px;
+                    -moz-border-radius: 2px;
+                    border-radius: 2px;
+                    color:#fff;
+                    background-color:var(--van-gray-7);
+                    cursor:pointer;
+                    user-select:none;
+                    &:hover{
+                        background:var(--van-gray-8);
+                    }
+                }
+                .input-box{
+                    .text::-webkit-input-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                    .text:-ms-input-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                    .text:-moz-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                    .text::-moz-placeholder {
+                        color: var(--van-gray-7);
+                    }
+                }
+            }
+        }
         :deep(.topicContent){
             margin-left: 12px;
             margin-right: 12px;
@@ -4684,7 +5478,18 @@
                 cursor: zoom-in;
                 vertical-align: sub;
             }
-
+            .download{
+                color: #1890ff;
+                margin: 0 5px 0 5px;
+                cursor: pointer;
+                .link-icon {
+                    position: relative;
+                    top: 4px;
+                    margin-right: 2px;
+                    color:#1890ff;
+                    width: 20px; height: 20px;
+                }
+            }
             /** 解决Chrome内核浏览器DPI缩放比例高于100%时部分边框变粗问题   本方案需删除table样式 border="1" bordercolor="#000000" */
             table {
                 border-collapse: separate; 
@@ -5141,6 +5946,84 @@
                         }
                     }
                 }
+                :deep(.commentMarkdownContent){
+                    padding-bottom: 10px;
+                    word-wrap:break-word;
+                    color: var(--van-gray-8);
+                    font-size:15px; 
+                    line-height:1.75; 
+                    margin-top: 20px;
+                    
+                    .cancelAccount{
+                        display: inline-block;
+                        vertical-align: middle;
+                        padding: 6px 6px;
+                        font-size: 14px;
+                        line-height: 14px;
+                        -webkit-border-radius: 2px;
+                        -moz-border-radius: 2px;
+                        border-radius: 2px;
+                        color:  var(--van-gray-5);
+                        background-color:  var(--van-gray-1);
+                    }
+                    img {
+                        max-width:100%;
+                        height:auto;
+                        border:none;
+                        background:none;
+                        margin:0;
+                        padding:0;
+                        vertical-align: sub;
+                    }
+                    p{
+                        font-size:16px;
+                        word-wrap:break-word
+                    }
+                    code[class*="language-"]{
+                        padding: 0 0;
+                    }
+                    pre{
+                        white-space:pre-wrap;
+                        code{/*连续字母数字换行*/
+                            word-break: break-all;
+                        }
+                    }
+                    table {
+                        width: 100%;
+                        th {
+                            font-weight: 600
+                        }
+                        td,th {
+                            border: 1px solid  var(--van-gray-3);
+                            padding: 6px 13px
+                        }
+                        tr {
+                            background-color: #fff;
+                            border-top: 1px solid  var(--van-gray-3);
+                            &:nth-child(2n) {
+                                background-color:  var(--van-gray-1);
+                            }
+                        }
+                    }
+                    ol{
+                        li{ 
+                            list-style-type:decimal;
+                            list-style-position:inside;
+                        }
+                    }
+                    ul{
+                        li{ 
+                            margin-left:20px;
+                            list-style-type:disc;
+                        }
+                    }
+                    .task-list-item {
+                        list-style-type:none;
+                    }
+                    iframe{
+                        width:100%; height: 550px;padding:10px 0px; 
+                    }
+                }
                 :deep(.commentContent){
                     padding-bottom: 10px;
                     word-wrap:break-word;
@@ -5472,6 +6355,16 @@
 	-webkit-overflow-scrolling: touch;
 	height: 100%; 
     .form-container{
+        :deep(.bytemd-editor){
+            min-height: 250px !important; 
+        }
+        
+        :deep(.CodeMirror-sizer){
+            min-height: 245px !important; 
+        }
+        :deep(.bytemd-preview){
+            min-height: 250px !important; 
+        }
         .van-cell {
             padding: 0px var(--van-cell-horizontal-padding) var(--van-cell-vertical-padding) var(--van-cell-horizontal-padding);
         
@@ -5504,6 +6397,16 @@
         border-radius:3px;
     }
     .form-container{
+        :deep(.bytemd-editor){
+            min-height: 250px !important; 
+        }
+        
+        :deep(.CodeMirror-sizer){
+            min-height: 245px !important; 
+        }
+        :deep(.bytemd-preview){
+            min-height: 250px !important; 
+        }
         .van-cell {
             padding: 0px var(--van-cell-horizontal-padding) var(--van-cell-vertical-padding) var(--van-cell-horizontal-padding);
         
@@ -5526,6 +6429,16 @@
 	-webkit-overflow-scrolling: touch;
 	height: 100%;
     .form-container{
+        :deep(.bytemd-editor){
+            min-height: 250px !important; 
+        }
+        
+        :deep(.CodeMirror-sizer){
+            min-height: 245px !important; 
+        }
+        :deep(.bytemd-preview){
+            min-height: 250px !important; 
+        }
         .van-cell {
             padding: 0px var(--van-cell-horizontal-padding) var(--van-cell-vertical-padding) var(--van-cell-horizontal-padding);
         

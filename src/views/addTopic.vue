@@ -81,11 +81,14 @@
 
                             <van-field center :error-message="error.content">
                                 <template #input>
-                                    <div style="margin-left: -5px;width: 100%;" :style="form.editorIconCount < 10 ? 'margin-left:0px;' : ''">
+                                    <div v-show="!form.isMarkdown" style="margin-left: -5px;width: 100%;" :style="form.editorIconCount < 10 ? 'margin-left:0px;' : ''">
                                         <van-sticky :z-index="1" >
                                             <div ref="topicContentEditorToolbarRef" class="editor-toolbar" style="padding-top: 5px;margin-left: -7px;"></div>
                                         </van-sticky>
-                                        <div ref="topicContentEditorTextRef"  class="editor-text" style="min-height: 320px;"></div>
+                                        <div :editorId="'addTopic'" ref="topicContentEditorTextRef"  class="editor-text" style="min-height: 320px;"></div>
+                                    </div>
+                                    <div v-if="form.isMarkdown" style="width: 100%;" >
+                                        <Editor mode="tab" :editorId="'addTopic'" :value="form.markdownContent" :plugins="form.addTopicEditorPlugin" :locale="zhHans" :editorConfig="markdownEditorConfig" :sanitize="addTopicSanitize" placeholder="请输入内容..." @change="handleMarkdownChange"/>
                                     </div>
                                 </template>
                             </van-field>
@@ -127,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref, onUnmounted, nextTick, watchEffect, onActivated} from 'vue'
+import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref, onUnmounted, nextTick, watchEffect, onActivated, h, App} from 'vue'
     import { onBeforeRouteUpdate, useRouter } from 'vue-router'
     import { AxiosResponse } from 'axios'
     import { calc_add, calc_multiply, getPageBasePath,processErrorInfo} from '@/utils/tool';
@@ -139,7 +142,18 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
     import { onBack } from '@/utils/history'
     import { convertViewportWidth } from '@/utils/px-to-viewport';
     import { createEditor, destroyEditor } from '@/utils/editor';
-    
+    import { markdownPlugins,markdownEditorConfig,sanitize, markdownToHtml } from '@/utils/markdownEditor';
+    import { toggleEditor } from '@/utils/markdownPlugin/plugin-toggle-editor';
+    import { help } from '@/utils/markdownPlugin/plugin-help';
+    import { emoji } from '@/utils/markdownPlugin/plugin-emoji';
+    import { imageUpload } from '@/utils/markdownPlugin/plugin-image-upload';
+    import { pasteImageUpload } from '@/utils/markdownPlugin/plugin-paste-image';
+    import { fileUpload } from '@/utils/markdownPlugin/plugin-file-upload';
+    import { videoUpload } from '@/utils/markdownPlugin/plugin-video-upload';
+    import { hideContent } from '@/utils/markdownPlugin/plugin-hide-content';
+    import type { BytemdPlugin } from 'bytemd'
+    import { Editor } from '@bytemd/vue-next'
+    import zhHans from 'bytemd/locales/zh_Hans.json'
   
     const { proxy } = getCurrentInstance() as ComponentInternalInstance;
     const store = useStore(pinia);
@@ -173,9 +187,11 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         giveRedEnvelopeAmountMin:'',//发红包金额下限
         giveRedEnvelopeAmountMax:'',//发红包金额上限  空为无限制 0则不允许发红包 
         userGradeList:[],//用户等级
-        availableTag:[],//话题编辑器允许使用标签
+        availableTag:[] as Array<string>,//话题编辑器允许使用标签
         editorIconCount:0,//富文本框图标数量
         fileSystem:0,//文件存储系统
+        supportEditor:10,//支持编辑器
+
 
         showRedEnvelopeText:false,//显示发红包按钮
         showRedEnvelopeForm:false,//显示发红包表单
@@ -194,6 +210,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         title:'',//标题
         content:'',//内容
         showTagPicker:false,//是否显示标签选项
+        markdownContent:'',//markdown内容
+        isMarkdown:false,//是否使用markdown编辑器
 
         showCaptcha:false,//是否显示验证码
         captchaKey: '',//验证码key
@@ -205,6 +223,9 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 		addTopicEditorCreateParameObject :{} as any,//添加话题编辑器的创建参数
 
         isRefreshing:false,//是否处于下拉加载中状态
+
+        addTopicEditorPlugin:[] as BytemdPlugin[],//添加话题Markdown编辑器插件
+
     })
     //错误
     const error = reactive({
@@ -231,6 +252,7 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         form.userGradeList.length= 0;//用户等级
         form.availableTag.length= 0;//话题编辑器允许使用标签
         form.fileSystem = 0;//文件存储系统
+        form.supportEditor= 10;//支持编辑器
 
         form.showRedEnvelopeText = false;//显示发红包按钮
         form.showRedEnvelopeForm = false;//显示发红包表单
@@ -249,6 +271,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         form.title = '';//标题
         form.content = '';//内容
         form.showTagPicker = false;//是否显示标签选项
+        form.markdownContent = '';//markdown内容
+        form.isMarkdown =false;//是否使用markdown编辑器
 
         form.showCaptcha = false;//是否显示验证码
         form.captchaKey =  '';//验证码key
@@ -256,7 +280,7 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         form.imgUrl =  '';//验证码图片
         form.allowSubmit = false;//提交按钮disabled状态
 
-        
+        form.addTopicEditorPlugin.length = 0;//添加话题Markdown编辑器插件
 
         if (Object.keys(form.addTopicEditor).length != 0) {//不等于空
             destroyEditor(form.addTopicEditor);
@@ -267,6 +291,56 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         init();
     };
 
+
+    //处理Markdown
+    const handleMarkdownChange = (value: string) => {
+        form.markdownContent = value;
+    }
+
+    //白名单
+    const addTopicSanitize = (schema: any) => {
+        schema = sanitize(schema);
+        
+        if(form.availableTag?.indexOf('embedVideo') != -1){//嵌入视频
+            schema.tagNames.push('iframe');
+        }
+
+        return schema;
+    }
+
+
+    //处理切换到富文本编辑器
+    const handleToggleRichtextEditor = (editorId: string) => {
+        form.isMarkdown = false;
+        nextTick(()=>{
+            if (Object.keys(form.addTopicEditorCreateParameObject).length != 0) {//不等于空
+                //创建富文本编辑器
+                form.addTopicEditor = createEditor(
+                    form.addTopicEditorCreateParameObject.toolbarRef, 
+                    form.addTopicEditorCreateParameObject.textRef, 
+                    form.addTopicEditorCreateParameObject.editorIconList, 
+                    getPageBasePath()+'common/default/', 
+                    form.addTopicEditorCreateParameObject.uploadPath, 
+                    form.addTopicEditorCreateParameObject.userGradeList,
+                    form.fileSystem,
+                    (editorId: string)=>{
+                        handleToggleMarkdownEditor(editorId);
+                    }
+                );
+            }
+        })
+        
+        
+    }
+
+    //处理切换到Markdown编辑器
+    const handleToggleMarkdownEditor = (editorId: string) => {
+        if (Object.keys(form.addTopicEditor).length != 0) {//不等于空
+            destroyEditor(form.addTopicEditor);
+            form.addTopicEditor = {};
+        }
+        form.isMarkdown = true;
+    }
 
 
     //显示标签选项
@@ -367,12 +441,15 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                                 }
                             }
                         }
-
+                        if(data.supportEditor == 30 || data.supportEditor == 40){
+                            availableTagObject.push("toggleEditor");
+                        }
                         form.availableTag = availableTagObject;//话题编辑器允许使用标签
                     }
                     
                     form.fileSystem = data.fileSystem;//文件存储系统
-
+                    form.supportEditor = data.supportEditor;//支持编辑器 10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                
                     if(data.giveRedEnvelopeAmountMax == null || (data.giveRedEnvelopeAmountMax != null && parseInt(data.giveRedEnvelopeAmountMax) >0)){
                         //显示发红包
                         form.showRedEnvelopeText = true;
@@ -404,7 +481,7 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 							}else if(_availableTag == "italic"){//斜体
 								editorIconList.push("italic");
 							}else if(_availableTag == "underline"){//下划线
-								editorIconList.push("underline");
+							//	editorIconList.push("underline");
 							}else if(_availableTag == "link"){//插入链接
 								editorIconList.push("link");
 							}else if(_availableTag == "emoticons"){//插入表情
@@ -429,6 +506,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 								editorIconList.push("hidePoint");
 							}else if(_availableTag == "hideAmount"){//余额购买可见
 								editorIconList.push("hideAmount");
+							}else if(_availableTag == "toggleEditor"){//切换编辑器
+								editorIconList.push("toggleEditor");
 							}
 						}
 
@@ -441,29 +520,81 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                                 break;
                             }
                         }
+                        if(form.supportEditor == 20 || form.supportEditor == 40){
+                            form.isMarkdown = true;
+                        }
+                       
+                        if(form.addTopicEditorPlugin != null && form.addTopicEditorPlugin.length ==0){
+                            //添加插件
+                            form.addTopicEditorPlugin.push(...markdownPlugins);
+                            
+                            
+                            if(form.supportEditor == 30 || form.supportEditor == 40){//10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                                form.addTopicEditorPlugin.push(
+                                    toggleEditor((editorId: string)=>{handleToggleRichtextEditor(editorId)})
+                                );
+                            }
+                           
+                            if(editorIconList?.indexOf('hidePassword') != -1 
+                                || editorIconList?.indexOf('hideComment') != -1
+                                || editorIconList?.indexOf('hideGrade') != -1 
+                                || editorIconList?.indexOf('hidePoint') != -1 
+                                || editorIconList?.indexOf('hideAmount') != -1
+                                ){
+                                form.addTopicEditorPlugin.push(
+                                    hideContent(editorIconList,form.userGradeList)
+                                );
+                            }
 
-                        
+                            if(editorIconList?.indexOf('uploadVideo') != -1){
+                                form.addTopicEditorPlugin.push(
+                                    videoUpload("user/control/topic/upload?method=upload","file",form.fileSystem)
+                                );
+                            }
+                            if(editorIconList?.indexOf('image') != -1){
+                                form.addTopicEditorPlugin.push(
+                                    imageUpload("user/control/topic/upload?method=upload",'file',form.fileSystem)
+                                );
+                                form.addTopicEditorPlugin.push(
+                                    pasteImageUpload("user/control/topic/upload?method=upload",'file',form.fileSystem)
+                                );
+                            }  
+                            if(editorIconList?.indexOf('file') != -1){
+                                form.addTopicEditorPlugin.push(
+                                    fileUpload("user/control/topic/upload?method=upload",'file',form.fileSystem)
+                                );
+                            }
+                            form.addTopicEditorPlugin.push(emoji());
+
+                            form.addTopicEditorPlugin.push(
+                                help(editorIconList,form.userGradeList)
+                            );
+                            
+                        }
                         
                      //   topicContentEditorToolbarRef.value.innerHTML = "";
                      //   topicContentEditorTextRef.value.innerHTML = "";
 
+                        if(!form.isMarkdown){
+                            //创建富文本编辑器
+                            form.addTopicEditor = createEditor(topicContentEditorToolbarRef.value,topicContentEditorTextRef.value,editorIconList, getPageBasePath()+'common/default/', uploadPath, form.userGradeList,form.fileSystem,(editorId: string)=>{
+                                handleToggleMarkdownEditor(editorId);
+                            });
+                        }
                         
-                        //创建富文本编辑器
-                        form.addTopicEditor = createEditor(topicContentEditorToolbarRef.value,topicContentEditorTextRef.value,editorIconList, getPageBasePath()+'common/default/', uploadPath, form.userGradeList,form.fileSystem);
-                        if (Object.keys(form.addTopicEditor).length > 0) {
-                            form.addTopicEditorCreateParameObject = {
-                                toolbarRef:topicContentEditorToolbarRef.value,
-                                textRef:topicContentEditorTextRef.value,
-                                editorIconList:editorIconList,
-                                uploadPath:uploadPath,
-                                userGradeList:form.userGradeList
-                            }
+                        form.addTopicEditorCreateParameObject = {
+                            toolbarRef:topicContentEditorToolbarRef.value,
+                            textRef:topicContentEditorTextRef.value,
+                            editorIconList:editorIconList,
+                            uploadPath:uploadPath,
+                            userGradeList:form.userGradeList
                         }
 
-                        nextTick(()=>{
-                            form.editorIconCount = form.addTopicEditor.toolbarSelector.childElementCount
-                        })
-                        
+                        if(!form.isMarkdown){
+                            nextTick(()=>{
+                                form.editorIconCount = form.addTopicEditor.toolbarSelector.childElementCount
+                            })
+                        }
                        
                     }
                     
@@ -500,8 +631,6 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
        
         
     }
-
-    
 
     //金额格式化
     const amountFormat = (value:string):string => {
@@ -619,8 +748,6 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
             }
         });
     }
-
-
     //提交数据
     const onSubmit = () => {
         form.allowSubmit = true;//提交按钮disabled状态
@@ -654,11 +781,18 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                     formData.append('title', form.title);
                 }
 
-                let content =  form.addTopicEditor.txt.html()
-                if(content != null && content !=''){
-                    formData.append('content', content);
+                if(form.isMarkdown){
+                    formData.append('isMarkdown', form.isMarkdown.toString());
+                    formData.append('markdownContent', form.markdownContent);
+                }else{
+                    let content =  form.addTopicEditor.txt.html()
+                    if(content != null && content !=''){
+                        formData.append('content', content);
+                    }
                 }
 
+
+                
                 //如果显示红包表单
                 if(form.showRedEnvelopeForm){
                     formData.append('type', String(form.giveRedEnvelope_type));//发红包类型
@@ -782,6 +916,17 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
             }
         }
     }
+
+    :deep(.bytemd-editor){
+        min-height: 250px !important; 
+    }
+    :deep(.CodeMirror-sizer){
+        min-height: 245px !important; 
+    }
+    :deep(.bytemd-preview){
+        min-height: 250px !important; 
+    }
+
     .form-container{
         :deep(.van-radio--horizontal){
             margin-top: 2px;

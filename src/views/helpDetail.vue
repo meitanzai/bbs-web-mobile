@@ -34,8 +34,8 @@
                     <div class="helpDetail"  v-if="!state.isSkeleton">
                         <div class="name">{{state.help.name}}</div>
                         <div class="time van-hairline--bottom">{{state.help.times}}</div>
-                        <div class="content" :ref="'help_'+state.help.id">
-                            <RenderTemplate @click-onZoomPicture="onZoomPicture" :html="state.help.content"></RenderTemplate>
+                        <div :class="[state.help.isMarkdown != null && state.help.isMarkdown == true ? 'markdown-body-custom helpMarkdownContent' : 'content']" :ref="'help_'+state.help.id">
+                            <RenderTemplate @click-onZoomPicture="onZoomPicture" @click-onDownload="onDownload" :html="state.help.content"></RenderTemplate>
                                         
                         </div>
                     </div>
@@ -58,13 +58,21 @@
     import { onBeforeRouteUpdate, useRouter } from 'vue-router'
     import { AxiosResponse } from 'axios'
     import { Help } from "@/types/index";
-    import { escapeVueHtml } from '@/utils/escape';
+    import { escapeHtml, escapeVueHtml,unescapeHtml } from '@/utils/escape';
     import { getLanguageClassName, getPageBasePath } from '@/utils/tool';
     import { ImagePreview} from 'vant';
     import Hls from 'hls.js';
     import DPlayer from 'dplayer';
     import Prism from "prismjs";
-    import { nativeQueryVideoRedirect, nativeRefreshToken } from '@/utils/http';
+    import { nativeDownloadRedirect, nativeQueryVideoRedirect, nativeRefreshToken } from '@/utils/http';
+    import mermaid from "mermaid";
+    import katex from 'katex'
+    import 'katex/dist/katex.css'   
+
+
+    mermaid.mermaidAPI.initialize({ startOnLoad: false });
+
+
 
     const { proxy } = getCurrentInstance() as ComponentInternalInstance;
     const store = useStore(pinia);
@@ -260,6 +268,30 @@
     }
 
     
+    //文件下载
+    const onDownload = (href: string) => {
+        let regx = new RegExp("^"+store.apiUrl,"i");//忽略大小写
+        let path = href.replace(regx,"")
+
+        proxy?.$axios({
+            url: '/'+path,
+            method: 'get',
+            params:  {
+            },
+            showLoading: false,//是否显示加载图标
+            loadingMask:false,// 是否显示遮罩层
+        })
+        .then((response: AxiosResponse) => {
+            if(response){
+                const result: any = response.data;
+                if(JSON.parse(result.success)){
+                    location.href = result.redirect;
+                }
+            }
+        }).catch((error: any) =>{
+            console.log(error);
+        });
+    }
 
     //递归绑定节点参数
     const bindNode = (node:any) => {
@@ -326,53 +358,139 @@
                     state.playerIdList.push(id);	
                 }
 
+                //处理下载
+                if(childNode.nodeName.toLowerCase() == "a" ){
+                    let href = childNode.getAttribute("href")
+                    let title = childNode.getAttribute("title")
+                    let linkType = childNode.getAttribute("linkType")
+                    let startUrl = store.apiUrl+"fileDowload?jump=";
+                    if(linkType == "download" && href != ""){
+                        let downloadHtml = "";
+                        if(href.toLowerCase().startsWith(startUrl.toLowerCase())){
+                            downloadHtml ='<span class="download" @click="onDownload_renderTemplate(`'+href+'`);"><Icon name="download-2-line" size="24px" class="link-icon"></Icon>'+escapeHtml(title)+'</span>';
+                          
+                        }else{
+                            downloadHtml ='<a class="download" href="'+href+'"><Icon name="download-2-line" size="24px" class="link-icon"></Icon>'+escapeHtml(title)+'</a>';
+                        }
+                        let downloadDom = document.createElement('div');
+                        downloadDom.innerHTML=downloadHtml;
+
+                        childNode.replaceWith(downloadDom.firstElementChild);
+                    }
+                }
+
                 
                 //处理代码标签
                 if(childNode.nodeName.toLowerCase() == "pre" ){
-                    let pre_html = childNode.innerHTML;
-                    let class_val = childNode.className;
-                    let lan_class = "";
+
                     
-                    let class_arr = new Array();
-                    class_arr = class_val.split(' ');
+                    let firstChildNode = null;//第一个子节点
+
+                    for(let p = 0;p < childNode.childNodes.length;p++){
+                        let preChildNode = childNode.childNodes[p];
+                        if(preChildNode.nodeName.toLowerCase() == "code" ){
+                            firstChildNode = preChildNode;
+                            break;
+                        }
+                    }
                     
-                    for(let k=0; k<class_arr.length; k++){
-                        let className = class_arr[k].trim();
+                    if(firstChildNode != null && firstChildNode.getAttribute("class")!= null && firstChildNode.getAttribute("class").indexOf("language-") != -1){//Markdown代码
                         
-                        if(className != null && className != ""){
-                            if (className.lastIndexOf('lang-', 0) === 0) {
-                                lan_class = className;
-                                break;
+                        let class_val = firstChildNode.className;
+                        let lan_class = "";
+                        let class_arr = new Array();
+                        class_arr = class_val.split(' ');
+                        
+                        for(let k=0; k<class_arr.length; k++){
+                            let className = class_arr[k].trim();
+                            
+                            if(className != null && className != ""){
+                                if (className.lastIndexOf('language-', 0) === 0) {
+                                    lan_class = className;
+                                    break;
+                                }
                             }
                         }
+                        if(firstChildNode.getAttribute("class").indexOf("language-mermaid") == -1){
+                            childNode.className = "line-numbers "+lan_class;
+                            childNode.setAttribute("data-prismjs-copy","复制");
+                            childNode.setAttribute("data-prismjs-copy-error","按Ctrl+C复制");
+                            childNode.setAttribute("data-prismjs-copy-success","复制成功");
+
+
+                            let nodeHtml = "";
+
+                            //删除code节点
+                            let preChildNodeList = childNode.childNodes;
+                            for(let p = 0;p < preChildNodeList.length;p++){
+                                let preChildNode = preChildNodeList[p];
+                                if(preChildNode.nodeName.toLowerCase() == "code" ){
+                                    nodeHtml += preChildNode.innerHTML;
+                                    preChildNode.parentNode.removeChild(preChildNode);
+                                }
+                                
+                            }
+                            
+                            let dom = document.createElement('code');
+                            dom.className = "line-numbers "+lan_class;
+                            dom.innerHTML=nodeHtml;
+                            
+                        
+                            childNode.appendChild(dom);
+                        }
                     }
-                    
-                    childNode.className = "line-numbers "+getLanguageClassName(lan_class);
-                    childNode.setAttribute("data-prismjs-copy","复制");
-                    childNode.setAttribute("data-prismjs-copy-error","按Ctrl+C复制");
-                    childNode.setAttribute("data-prismjs-copy-success","复制成功");
 
 
-                    let nodeHtml = "";
-
-                    //删除code节点
-                    let preChildNodeList = childNode.childNodes;
-                    for(let p = 0;p < preChildNodeList.length;p++){
-                        let preChildNode = preChildNodeList[p];
-                        if(preChildNode.nodeName.toLowerCase() == "code" ){
-                            nodeHtml += preChildNode.innerHTML;
-                            preChildNode.parentNode.removeChild(preChildNode);
+                    if(childNode.className != null && childNode.className.indexOf("lang-") != -1){//富文本编辑器代码
+                       
+                        let pre_html = childNode.innerHTML;
+                        let class_val = childNode.className;
+                        let lan_class = "";
+                        
+                        let class_arr = new Array();
+                        class_arr = class_val.split(' ');
+                        
+                        for(let k=0; k<class_arr.length; k++){
+                            let className = class_arr[k].trim();
+                            
+                            if(className != null && className != ""){
+                                if (className.lastIndexOf('lang-', 0) === 0) {
+                                    lan_class = className;
+                                    break;
+                                }
+                            }
                         }
                         
+                        childNode.className = "line-numbers "+getLanguageClassName(lan_class);
+                        childNode.setAttribute("data-prismjs-copy","复制");
+                        childNode.setAttribute("data-prismjs-copy-error","按Ctrl+C复制");
+                        childNode.setAttribute("data-prismjs-copy-success","复制成功");
+
+
+                        let nodeHtml = "";
+
+                        //删除code节点
+                        let preChildNodeList = childNode.childNodes;
+                        for(let p = 0;p < preChildNodeList.length;p++){
+                            let preChildNode = preChildNodeList[p];
+                            if(preChildNode.nodeName.toLowerCase() == "code" ){
+                                nodeHtml += preChildNode.innerHTML;
+                                preChildNode.parentNode.removeChild(preChildNode);
+                            }
+                            
+                        }
+                        
+                        let dom = document.createElement('code');
+                        dom.className = "line-numbers "+getLanguageClassName(lan_class);
+                        dom.innerHTML=nodeHtml;
+                        
+                    
+                        childNode.appendChild(dom);
                     }
-                    
-                    let dom = document.createElement('code');
-                    dom.className = "line-numbers "+getLanguageClassName(lan_class);
-                    dom.innerHTML=nodeHtml;
+
                     
                     
-                    childNode.appendChild(dom);
-                
+                   
                 }
                 
                 bindNode(childNode);
@@ -396,8 +514,67 @@
             if(childNode.nodeType == 1){
                 //处理代码标签
                 if(childNode.nodeName.toLowerCase() == "pre" ){
+                    let firstChildNode:any = null;//第一个子节点
+                    for(let p = 0;p < childNode.childNodes.length;p++){
+                        let preChildNode = childNode.childNodes[p];
+                        if(preChildNode.nodeName.toLowerCase() == "code" ){
+                            firstChildNode = preChildNode;
+                            break;
+                        }
+                    }
+                   
+                    if(firstChildNode != null && firstChildNode.getAttribute("class")!= null){
+                        if(firstChildNode.getAttribute("class") != null && firstChildNode.getAttribute("class").indexOf("language-mermaid") != -1){
+                           
+                            if(firstChildNode.innerHTML){
+                                  //  const { svg } = await mermaid.render('mermaid_'+random, unescapeHtml(firstChildNode.innerHTML));
+
+                              //  childNode.innerHTML = svg;
+
+                              const mermaid_container = document.createElement('div')
+                                mermaid_container.style.lineHeight = 'initial' //重置行高
+
+                                childNode.replaceWith(mermaid_container);
+                                mermaid.render(
+                                    'mermaid_'+random,
+                                    unescapeHtml(firstChildNode.innerHTML),
+                                    // @ts-ignore
+                                    mermaid_container
+                                ).then((svgCode) => {
+                                    // @ts-ignore
+                                    mermaid_container.innerHTML = svgCode.svg
+                                
+                                })
+                                .catch((err) => {
+                                // console.error(err);
+                                })
+                            }
+                        }else if(firstChildNode.getAttribute("class").indexOf("language-mermaid") != -1){
+                            
+                        }else{
+                            Prism.highlightAllUnder(childNode);
+                        }
+                    }
+                   
                     
-                    Prism.highlightAllUnder(childNode);
+                   
+                }else if(childNode.nodeName.toLowerCase() == "span"){
+                    if(childNode.getAttribute("class") != null && childNode.getAttribute("class").indexOf("math-inline") != -1 && childNode.childNodes.length==1 && childNode.childNodes[0].nodeType ==3){
+                        let tex = katex.renderToString(unescapeHtml(childNode.innerHTML), {
+                            throwOnError: false,
+                            displayMode:false//内联模式
+                        });
+                        childNode.innerHTML = tex;
+                    }
+                }else if(childNode.nodeName.toLowerCase() == "div"){
+                    if(childNode.getAttribute("class") != null && childNode.getAttribute("class").indexOf("math-display") != -1 && childNode.childNodes.length==1 && childNode.childNodes[0].nodeType ==3){
+                        let tex = katex.renderToString(unescapeHtml(childNode.innerHTML), {
+                            throwOnError: false,
+                            displayMode:true//块模式
+                        });
+                        childNode.innerHTML = tex;
+
+                    }
                 }
                 renderBindNode(childNode);
             }
@@ -690,6 +867,147 @@
             padding-bottom: 10px;
             color: var(--van-gray-6);
         }
+        :deep(.helpMarkdownContent){
+            margin-top: 12px;
+            padding-bottom: 20px;
+            color:var(--van-gray-8);
+            font-size:16px; 
+            line-height:1.75; 
+            word-wrap:break-word;
+            min-height: 100px;
+            //自动换行
+            pre{
+                white-space:pre-wrap;
+            }
+            
+            ol{
+                list-style: decimal;
+            }
+            ol li{
+                list-style-type:decimal;
+                list-style-position:inside;
+            }
+            ul{
+                list-style: disc;
+            }
+            // ul li{
+                //   list-style-type:disc;
+            //  }
+            .task-list-item {
+                list-style-type:none;
+            }
+            .download{
+                color: #1890ff;
+                margin: 0 5px 0 5px;
+                cursor: pointer;
+                .link-icon {
+                    position: relative;
+                    top: 4px;
+                    margin-right: 2px;
+                    color:#1890ff;
+                    width: 20px; height: 20px;
+                }
+            }
+            a{
+                color: var(--van-blue);
+                font-size:16px;
+            }
+            p{
+                font-size:16px;
+                word-wrap:break-word
+            }
+            img{
+                max-width:100%;height:auto;border:none;background:none;margin:0;padding:0; 
+                cursor: -webkit-zoom-in;
+                cursor: zoom-in;
+                vertical-align: sub;
+            }
+            code[class*="language-"]{
+                padding: 0 0;
+            }
+
+
+            /** 解决Chrome内核浏览器DPI缩放比例高于100%时部分边框变粗问题   本方案需删除table样式 border="1" bordercolor="#000000" */
+            table {
+                border-collapse: separate; 
+                border-spacing: 0; 
+                border-top: 1px solid var(--van-gray-3);
+                border-left: 1px solid var(--van-gray-3);
+                th {
+                    font-weight: 600
+                }
+                th, td {
+                    border-right: 1px solid var(--van-gray-3);
+                    border-bottom: 1px solid var(--van-gray-3);
+                    padding: 6px 13px
+                }
+                tr {
+                    background-color: #fff;
+                    border-top: 1px solid var(--van-gray-3);
+                    &:nth-child(2n) {
+                        background-color: var(--van-gray-1);
+                    }
+                }
+            }
+            ol{
+                li{ 
+                    list-style-type:decimal;
+                    list-style-position:inside;
+                }
+            }
+            ul{
+                li{ 
+                    margin-left:20px;
+                    list-style-type:disc;
+                }
+            }
+            iframe{
+                width:100%; height: 300px;padding:10px 0px; 
+            }
+            player{
+                width: 100%;
+                height: 576px;
+                display: block;
+                margin-top: 10px;
+                margin-bottom: 10px;
+                //关闭页面全屏按钮
+                .dplayer-full-in-icon{
+                    display: none !important;
+                }
+            }
+            .dplayer-process {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 10;
+                .box{
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    .prompt{
+                        width: 250px;
+                        height: 80px;
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        right: 0;
+                        bottom: 0;
+                        margin: 100px auto;
+                        padding :0px 30px;
+                        border-radius :3px;
+                        color: #fff;
+                        line-height: 80px;
+                        font-size: 20px;
+                        background-color:rgb(0,0,0);
+                        opacity:0.7;
+                        filter:alpha(opacity=70);
+                        text-align: center;
+                    }
+                }
+            }
+        }
         :deep(.content){
             margin-top: 12px;
             padding-bottom: 20px;
@@ -711,7 +1029,18 @@
                 cursor: zoom-in;
                 vertical-align: sub;
             }
-
+            .download{
+                color: #1890ff;
+                margin: 0 5px 0 5px;
+                cursor: pointer;
+                .link-icon {
+                    position: relative;
+                    top: 4px;
+                    margin-right: 2px;
+                    color:#1890ff;
+                    width: 20px; height: 20px;
+                }
+            }
             /** 解决Chrome内核浏览器DPI缩放比例高于100%时部分边框变粗问题   本方案需删除table样式 border="1" bordercolor="#000000" */
             table {
                 border-collapse: separate; 

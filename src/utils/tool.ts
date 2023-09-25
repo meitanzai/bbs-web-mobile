@@ -1,5 +1,8 @@
 import { Dialog } from 'vant';
 import 'vant/es/dialog/style';
+import type { PropType } from 'vue'
+
+export const definePropType = <T>(val: any): PropType<T> => val
 
 /**
  * 获取接口值

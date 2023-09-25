@@ -92,12 +92,17 @@
 
                             <van-field center :error-message="error.content" class="content">
                                 <template #input>
-                                    <div style="width: 100%;">
+                                    <div v-show="!form.isMarkdown" style="width: 100%;">
                                         <van-sticky :z-index="1" >
                                             <div ref="questionContentEditorToolbarRef" class="editor-toolbar" style="padding-top: 5px;margin-left: -5px;"></div>
                                         </van-sticky>
                                         <div ref="questionContentEditorTextRef"  class="editor-text" style="min-height: 320px;"></div>
                                     </div>
+
+                                    <div v-if="form.isMarkdown" style="width: 100%;" >
+                                        <Editor mode="tab" :editorId="'addQuestion'" :value="form.markdownContent" :plugins="form.addQuestionEditorPlugin" :locale="zhHans" :editorConfig="markdownEditorConfig" :sanitize="addQuestionSanitize" placeholder="请输入内容..." @change="handleMarkdownChange"/>
+                                    </div>
+
                                 </template>
                             </van-field>
 
@@ -137,7 +142,7 @@
     </div>
 </template>
 <script setup lang="ts">
-import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref, onUnmounted, watchEffect, onActivated} from 'vue'
+import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref, onUnmounted, watchEffect, onActivated, nextTick} from 'vue'
     import { onBeforeRouteUpdate, useRouter } from 'vue-router'
     import { AxiosResponse } from 'axios'
     import {getPageBasePath, processErrorInfo} from '@/utils/tool';
@@ -149,7 +154,18 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
     import { onBack } from '@/utils/history'
     import { convertViewportWidth } from '@/utils/px-to-viewport';
     import { createEditor, destroyEditor } from '@/utils/editor';
-    
+    import { markdownPlugins,markdownEditorConfig,sanitize, markdownToHtml } from '@/utils/markdownEditor';
+    import { toggleEditor } from '@/utils/markdownPlugin/plugin-toggle-editor';
+    import { help } from '@/utils/markdownPlugin/plugin-help';
+    import { emoji } from '@/utils/markdownPlugin/plugin-emoji';
+    import { imageUpload } from '@/utils/markdownPlugin/plugin-image-upload';
+    import { pasteImageUpload } from '@/utils/markdownPlugin/plugin-paste-image';
+    import { fileUpload } from '@/utils/markdownPlugin/plugin-file-upload';
+    import { videoUpload } from '@/utils/markdownPlugin/plugin-video-upload';
+    import { hideContent } from '@/utils/markdownPlugin/plugin-hide-content';
+    import type { BytemdPlugin } from 'bytemd'
+    import { Editor } from '@bytemd/vue-next'
+    import zhHans from 'bytemd/locales/zh_Hans.json'
   
     const { proxy } = getCurrentInstance() as ComponentInternalInstance;
     const store = useStore(pinia);
@@ -180,8 +196,9 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         tagList:[] as Array<Tag>,//标签
         allowQuestion:true,//是否允许提问题
         userGradeList:[],//用户等级
-        availableTag:[],//问题编辑器允许使用标签
+        availableTag:[] as Array<string>,//问题编辑器允许使用标签
         fileSystem:0,//文件存储系统
+        supportEditor:10,//支持编辑器
 
         maxDeposit: '',//用户共有预存款
         maxPoint: '',//用户共有积分
@@ -207,6 +224,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         tagId:'',//标签Id
         title:'',//标题
         content:'',//内容
+        markdownContent:'',//markdown内容
+        isMarkdown:false,//是否使用markdown编辑器
 
         showCaptcha:false,//是否显示验证码
         captchaKey: '',//验证码key
@@ -218,6 +237,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 		addQuestionEditorCreateParameObject :{} as any,//添加话题编辑器的创建参数
 
         isRefreshing:false,//是否处于下拉加载中状态
+
+        addQuestionEditorPlugin:[] as BytemdPlugin[],//添加话题Markdown编辑器插件
     })
     //错误
     const error = reactive({
@@ -240,6 +261,7 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         form.userGradeList.length = 0;//用户等级
         form.availableTag.length = 0;//问题编辑器允许使用标签
         form.fileSystem = 0;//文件存储系统
+        form.supportEditor= 10;//支持编辑器
 
         form.maxDeposit =  '';//用户共有预存款
         form.maxPoint =  '';//用户共有积分
@@ -265,6 +287,8 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         form.tagId = '';//标签Id
         form.title = '';//标题
         form.content = '';//内容
+        form.markdownContent = '';//markdown内容
+        form.isMarkdown =false;//是否使用markdown编辑器
 
         form.showCaptcha = false;//是否显示验证码
         form.captchaKey =  '';//验证码key
@@ -272,6 +296,7 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         form.imgUrl =  '';//验证码图片
         form.allowSubmit = false;//提交按钮disabled状态
 
+        form.addQuestionEditorPlugin.length = 0;//添加话题Markdown编辑器插件
 
         if (Object.keys(form.addQuestionEditor).length != 0) {//不等于空
             destroyEditor(form.addQuestionEditor);
@@ -281,6 +306,58 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
         
         init();
     };
+
+
+    //处理Markdown
+    const handleMarkdownChange = (value: string) => {
+        form.markdownContent = value;
+    }
+
+    //白名单
+    const addQuestionSanitize = (schema: any) => {
+        schema = sanitize(schema);
+        
+        if(form.availableTag?.indexOf('embedVideo') != -1){//嵌入视频
+            schema.tagNames.push('iframe');
+        }
+
+        return schema;
+    }
+
+
+    //处理切换到富文本编辑器
+    const handleToggleRichtextEditor = (editorId: string) => {
+        form.isMarkdown = false;
+        nextTick(()=>{
+            if (Object.keys(form.addQuestionEditorCreateParameObject).length != 0) {//不等于空
+                //创建富文本编辑器
+                form.addQuestionEditor = createEditor(
+                    form.addQuestionEditorCreateParameObject.toolbarRef, 
+                    form.addQuestionEditorCreateParameObject.textRef, 
+                    form.addQuestionEditorCreateParameObject.editorIconList, 
+                    getPageBasePath()+'common/default/', 
+                    form.addQuestionEditorCreateParameObject.uploadPath, 
+                    form.addQuestionEditorCreateParameObject.userGradeList,
+                    form.fileSystem,
+                    (editorId: string)=>{
+                        handleToggleMarkdownEditor(editorId);
+                    }
+                );
+            }
+        })
+        
+        
+    }
+
+    //处理切换到Markdown编辑器
+    const handleToggleMarkdownEditor = (editorId: string) => {
+        if (Object.keys(form.addQuestionEditor).length != 0) {//不等于空
+            destroyEditor(form.addQuestionEditor);
+            form.addQuestionEditor = {};
+        }
+        form.isMarkdown = true;
+    }
+
 
     //查询提问题页
     const queryAddQuestion = () => {
@@ -321,12 +398,20 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                         form.userGradeList = JSON.parse(data.userGradeList);//JSON转为对象
                     }
                     if(data.availableTag != null && data.availableTag != ''){
-                        form.availableTag = JSON.parse(data.availableTag);//JSON转为对象
+                        let availableTagObject = JSON.parse(data.availableTag);//JSON转为对象
+
+                        if(data.supportEditor == 30 || data.supportEditor == 40){
+                            availableTagObject.push("toggleEditor");
+                        }
+                        form.availableTag = availableTagObject;//问题编辑器允许使用标签
                     }
                     
                     form.fileSystem = data.fileSystem;//文件存储系统
-
+                    form.supportEditor = data.supportEditor;//支持编辑器 10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
                 
+                    if(form.supportEditor == 20 || form.supportEditor == 40){
+                        form.isMarkdown = true;
+                    }
 
                     if (data.captchaKey != undefined && data.captchaKey != '') {
                         form.showCaptcha = true;
@@ -369,19 +454,54 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 								editorIconList.push("uploadVideo");
 							}else if(_availableTag == "insertfile"){//文件
 								editorIconList.push("file");
+							}else if(_availableTag == "toggleEditor"){//切换编辑器
+								editorIconList.push("toggleEditor");
 							}
 						}
 
-                        //创建富文本编辑器
-                        form.addQuestionEditor = createEditor(questionContentEditorToolbarRef.value,questionContentEditorTextRef.value,editorIconList, getPageBasePath()+'common/default/', uploadPath, form.userGradeList,form.fileSystem);
-                        if (Object.keys(form.addQuestionEditor).length > 0) {
-                            form.addQuestionEditorCreateParameObject = {
-                                toolbarRef:questionContentEditorToolbarRef.value,
-                                textRef:questionContentEditorTextRef.value,
-                                editorIconList:editorIconList,
-                                uploadPath:uploadPath,
-                                userGradeList:form.userGradeList
+                        if(form.addQuestionEditorPlugin != null && form.addQuestionEditorPlugin.length ==0){
+                            //添加插件
+                            form.addQuestionEditorPlugin.push(...markdownPlugins);
+                            
+                            
+                            if(form.supportEditor == 30 || form.supportEditor == 40){//10.仅富文本编辑器 20.仅Markdown编辑器  30.富文本编辑器优先 40.Markdown编辑器优先
+                                form.addQuestionEditorPlugin.push(
+                                    toggleEditor((editorId: string)=>{handleToggleRichtextEditor(editorId)})
+                                );
                             }
+                            
+                        
+                            if(editorIconList?.indexOf('image') != -1){
+                                form.addQuestionEditorPlugin.push(
+                                    imageUpload("user/control/question/upload?method=upload",'file',form.fileSystem)
+                                );
+                                form.addQuestionEditorPlugin.push(
+                                    pasteImageUpload("user/control/question/upload?method=upload",'file',form.fileSystem)
+                                );
+                            }  
+                        
+                            form.addQuestionEditorPlugin.push(emoji());
+
+                            form.addQuestionEditorPlugin.push(
+                                help(form.availableTag,form.userGradeList)
+                            );
+                            
+                        }
+
+                        if(!form.isMarkdown){
+                             //创建富文本编辑器
+                            form.addQuestionEditor = createEditor(questionContentEditorToolbarRef.value,questionContentEditorTextRef.value,editorIconList, getPageBasePath()+'common/default/', uploadPath, form.userGradeList,form.fileSystem,(editorId: string)=>{
+                                handleToggleMarkdownEditor(editorId);
+                            });
+                        
+                        }
+                        
+                        form.addQuestionEditorCreateParameObject = {
+                            toolbarRef:questionContentEditorToolbarRef.value,
+                            textRef:questionContentEditorTextRef.value,
+                            editorIconList:editorIconList,
+                            uploadPath:uploadPath,
+                            userGradeList:form.userGradeList
                         }
                     }
                     
@@ -657,10 +777,20 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
                 if(form.title != null && form.title != ''){
                     formData.append('title', form.title);
                 }
-                let content =  form.addQuestionEditor.txt.html()
-                if(content != null && content !=''){
-                    formData.append('content', content);
+
+                
+                if(form.isMarkdown){
+                    formData.append('isMarkdown', form.isMarkdown.toString());
+                    formData.append('markdownContent', form.markdownContent);
+                }else{
+                    let content =  form.addQuestionEditor.txt.html()
+                    if(content != null && content !=''){
+                        formData.append('content', content);
+                    }
                 }
+
+
+                
                 
                 if(form.amount != null && form.amount != ''){
                     formData.append('amount', form.amount);
@@ -775,6 +905,16 @@ import { getCurrentInstance, ComponentInternalInstance, reactive, onMounted, ref
 <style scoped lang="scss">
 
 .addQuestionModule{
+    :deep(.bytemd-editor){
+        min-height: 250px !important; 
+    }
+    :deep(.CodeMirror-sizer){
+        min-height: 245px !important; 
+    }
+    :deep(.bytemd-preview){
+        min-height: 250px !important; 
+    }
+
     .form-container{
         :deep(.van-radio--horizontal){
             margin-top: 2px;

@@ -51,7 +51,10 @@ export default defineComponent({
             imageLoad_renderTemplate: (src:string) => {
                 this.$emit("load-onImageLoad", '');
             },
-
+            //文件下载
+            onDownload_renderTemplate: (href:string) => {
+                this.$emit("click-onDownload", href);
+            },
 
             hide_passwordList: this.hide_passwordList,
             onInput: ($event:any) => {

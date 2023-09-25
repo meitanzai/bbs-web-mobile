@@ -1,4 +1,5 @@
 import escape from "lodash/escape";
+import unescape from "lodash/unescape";
 /**
  * 转义html
  * @param html
@@ -6,6 +7,14 @@ import escape from "lodash/escape";
  */
  export let escapeHtml = (html:string) =>{
     return escape(html);//引入lodash.js
+};  
+/**
+ * 还原html
+ * @param html
+ * @returns 
+ */
+export let unescapeHtml = (html:string) =>{
+    return unescape(html);//引入lodash.js
 };  
 /**
  * vue文本转义

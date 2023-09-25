@@ -17,6 +17,8 @@ import { Image as VanImage } from 'vant';
 import Icon from "@/components/icon/Icon.vue";
 import { statistic } from '@/utils/trackPageview'
 
+import 'bytemd/dist/index.css'//Markdown编辑器样式
+
 const app = createApp(App);
 
 app.use(router);
